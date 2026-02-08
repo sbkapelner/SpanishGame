@@ -102,47 +102,43 @@ void Kitchen::renderClockHands(SDL_Renderer* renderer) {
     const int clockCenterX = 503;
     const int clockCenterY = 333;
 
-    // Original coordinate setup
-    const int hourHandWidth = (int)(60 * 0.70f);      // 60x256 original
-    const int hourHandHeight = (int)(256 * 0.70f);
-    const int minuteHandWidth = (int)(142 * 0.50f);   // 142x504 original
-    const int minuteHandHeight = (int)(504 * 0.50f);
+    // Minute hand texture setup (minute_hand_nobg.png: 60x256 @ 0.70)
+    const int minuteHandWidth = (int)(60 * 0.70f);
+    const int minuteHandHeight = (int)(256 * 0.70f);
+    const int minutePivotX = 24;
+    const int minutePivotY = 149;
 
-    // Brown-cluster centers detected from assets
-    // (with current texture mapping: hourRect uses minute-hand texture, minuteRect uses hour-hand texture)
-    // Pivots from target color #3C2116 in each texture (with current swapped mapping)
-    // hourHandRect currently draws clockMinuteHandTexture (60x256 @ 0.70)
-    const int hourPivotX = 24;
-    const int hourPivotY = 149;
-    // minuteHandRect currently draws clockHourHandTexture (142x504 @ 0.50)
-    const int minutePivotX = 56;
-    const int minutePivotY = 320;
-
-    SDL_Rect hourHandRect;
-    hourHandRect.w = hourHandWidth;
-    hourHandRect.h = hourHandHeight;
-    hourHandRect.x = clockCenterX - (int)(hourPivotX * 0.70f);
-    hourHandRect.y = clockCenterY - (int)(hourPivotY * 0.70f);
+    // Hour hand texture setup (hour_hand_nobg.png: 142x504 @ 0.50)
+    const int hourHandWidth = (int)(142 * 0.50f);
+    const int hourHandHeight = (int)(504 * 0.50f);
+    const int hourPivotX = 56;
+    const int hourPivotY = 320;
 
     SDL_Rect minuteHandRect;
     minuteHandRect.w = minuteHandWidth;
     minuteHandRect.h = minuteHandHeight;
-    minuteHandRect.x = clockCenterX - (int)(minutePivotX * 0.50f);
-    minuteHandRect.y = clockCenterY - (int)(minutePivotY * 0.50f);
+    minuteHandRect.x = clockCenterX - (int)(minutePivotX * 0.70f);
+    minuteHandRect.y = clockCenterY - (int)(minutePivotY * 0.70f);
 
-    SDL_Point hourCenter = {
-        (int)(hourPivotX * 0.70f),
-        (int)(hourPivotY * 0.70f)
-    };
+    SDL_Rect hourHandRect;
+    hourHandRect.w = hourHandWidth;
+    hourHandRect.h = hourHandHeight;
+    hourHandRect.x = clockCenterX - (int)(hourPivotX * 0.50f);
+    hourHandRect.y = clockCenterY - (int)(hourPivotY * 0.50f);
 
     SDL_Point minuteCenter = {
-        (int)(minutePivotX * 0.50f),
-        (int)(minutePivotY * 0.50f)
+        (int)(minutePivotX * 0.70f),
+        (int)(minutePivotY * 0.70f)
     };
 
-    // Keep centers, but use the original texture mapping (asset names appear swapped)
-    SDL_RenderCopyEx(renderer, clockHourHandTexture, NULL, &minuteHandRect, minuteHandRotation, &minuteCenter, SDL_FLIP_NONE);
-    SDL_RenderCopyEx(renderer, clockMinuteHandTexture, NULL, &hourHandRect, hourHandRotation, &hourCenter, SDL_FLIP_NONE);
+    SDL_Point hourCenter = {
+        (int)(hourPivotX * 0.50f),
+        (int)(hourPivotY * 0.50f)
+    };
+
+    // Render order preserved from latest tuning: hour first, then minute on top
+    SDL_RenderCopyEx(renderer, clockHourHandTexture, NULL, &hourHandRect, hourHandRotation, &hourCenter, SDL_FLIP_NONE);
+    SDL_RenderCopyEx(renderer, clockMinuteHandTexture, NULL, &minuteHandRect, minuteHandRotation, &minuteCenter, SDL_FLIP_NONE);
 
     // Debug center markers
     const int hourCenterX = hourHandRect.x + hourCenter.x;
