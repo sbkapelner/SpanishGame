@@ -1,5 +1,6 @@
 #include "kitchen.h"
 #include <iostream>
+#include <cmath>
 
 Kitchen::Kitchen() : 
     kitchenTexture(nullptr), 
@@ -156,6 +157,81 @@ void Kitchen::renderClockHands(SDL_Renderer* renderer) {
     drawDot(minuteCenterX, minuteCenterY, 255, 0, 0); // Red: minute hand center
     drawDot(hourCenterX, hourCenterY, 0, 255, 0);     // Green: hour hand center
     drawDot(clockCenterX, clockCenterY, 0, 0, 255);   // Blue: clock zoom center
+
+    // Debug: 12 radial divisions through the clock center (red)
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    const float twoPi = 6.28318530717958647692f;
+    const float startAngle = -1.57079632679f; // 12 o'clock
+    const int lineLen = 1000; // long enough to reach screen edge from center
+
+    // Store adjusted hour-line angles so we can subdivide each segment into fifths
+    float hourAngles[12];
+
+    for (int i = 0; i < 12; ++i) {
+        float a = startAngle + (twoPi * i / 12.0f);
+
+        // Nudge 1,2,7,8 o'clock lines slightly counter-clockwise
+        if (i == 1 || i == 2 || i == 7 || i == 8) {
+            a -= 0.035f; // ~2 degrees CCW
+        }
+
+        // Nudge 3,4,5,6,10,11 o'clock lines slightly clockwise
+        if (i == 3 || i == 4 || i == 5 || i == 6 || i == 10 || i == 11) {
+            a += 0.035f; // ~2 degrees CW
+        }
+
+        // Extra clockwise tweak for 4 and 5 o'clock
+        if (i == 4 || i == 5) {
+            a += 0.030f; // additional CW boost
+        }
+
+        // Tiny correction: 4,5 slightly clockwise
+        if (i == 4 || i == 5) {
+            a += 0.008f;
+        }
+
+        // Tiny correction: 6,7,8 slightly counter-clockwise
+        if (i == 6 || i == 7 || i == 8) {
+            a -= 0.008f;
+        }
+
+        // Extra tiny correction: 10 and 11 slightly clockwise
+        if (i == 10 || i == 11) {
+            a += 0.004f;
+        }
+
+        hourAngles[i] = a;
+
+        int dx = (int)std::lround(std::cos(a) * lineLen);
+        int dy = (int)std::lround(std::sin(a) * lineLen);
+
+        // Single ray from center outward (no duplicate opposite line)
+        SDL_RenderDrawLine(renderer,
+            clockCenterX, clockCenterY,
+            clockCenterX + dx, clockCenterY + dy);
+    }
+
+    // Subdivide each 1/12 segment into fifths with green lines (4 inner marks each)
+    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 220);
+    for (int i = 0; i < 12; ++i) {
+        float a0 = hourAngles[i];
+        float a1 = hourAngles[(i + 1) % 12];
+        if (a1 < a0) a1 += twoPi;
+
+        for (int k = 1; k <= 4; ++k) {
+            float t = k / 5.0f;
+            float a = a0 + (a1 - a0) * t;
+            if (a >= twoPi) a -= twoPi;
+
+            int dx = (int)std::lround(std::cos(a) * lineLen);
+            int dy = (int)std::lround(std::sin(a) * lineLen);
+
+            SDL_RenderDrawLine(renderer,
+                clockCenterX, clockCenterY,
+                clockCenterX + dx, clockCenterY + dy);
+        }
+    }
 }
 
 bool Kitchen::isInZoomClickArea(int x, int y) const {
