@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Spanish Preposition Game</title>
+    <style>
+      body { 
+        margin: 0; 
+        background-color: black; 
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        overflow: hidden;
+      }
+      #canvas { 
+        display: block;
+        width: 800px;  /* Match your game's resolution */
+        height: 600px;
+        outline: none;
+      }
+      /* Hide emscripten elements we don't want */
+      .emscripten { display: none; }
+      .emscripten_border { display: none; }
+      #status { display: none; }
+      #progress { display: none; }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+    <script>
+      var Module = {
+        canvas: document.getElementById('canvas'),
+        onRuntimeInitialized: function() {
+          document.getElementById('canvas').focus();
+        }
+      };
+    </script>
+    {{{ SCRIPT }}}
+  </body>
+</html>

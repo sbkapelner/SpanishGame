@@ -1,0 +1,650 @@
+Minuto,Hora
+uno,dos
+dos,dos
+tres,dos
+cuatro,dos
+cinco,dos
+seis,dos
+siete,dos
+ocho,dos
+nueve,dos
+diez,dos
+once,dos
+doce,dos
+trece,dos
+catorce,dos
+quince,dos
+dieciséis,dos
+diecisiete,dos
+dieciocho,dos
+diecinueve,dos
+veinte,dos
+veintiuno,dos
+veintidós,dos
+veintitrés,dos
+veinticuatro,dos
+veinticinco,dos
+veintiséis,dos
+veintisiete,dos
+veintiocho,dos
+veintinueve,dos
+treinta,dos
+treinta y uno,dos
+treinta y dos,dos
+treinta y tres,dos
+treinta y cuatro,dos
+treinta y cinco,dos
+treinta y seis,dos
+treinta y siete,dos
+treinta y ocho,dos
+treinta y nueve,dos
+cuarenta,dos
+cuarenta y uno,dos
+cuarenta y dos,dos
+cuarenta y tres,dos
+cuarenta y cuatro,dos
+cuarenta y cinco,dos
+cuarenta y seis,dos
+cuarenta y siete,dos
+cuarenta y ocho,dos
+cuarenta y nueve,dos
+cincuenta,dos
+cincuenta y uno,dos
+cincuenta y dos,dos
+cincuenta y tres,dos
+cincuenta y cuatro,dos
+cincuenta y cinco,dos
+cincuenta y seis,dos
+cincuenta y siete,dos
+cincuenta y ocho,dos
+cincuenta y nueve,dos
+uno,tres
+dos,tres
+tres,tres
+cuatro,tres
+cinco,tres
+seis,tres
+siete,tres
+ocho,tres
+nueve,tres
+diez,tres
+once,tres
+doce,tres
+trece,tres
+catorce,tres
+quince,tres
+dieciséis,tres
+diecisiete,tres
+dieciocho,tres
+diecinueve,tres
+veinte,tres
+veintiuno,tres
+veintidós,tres
+veintitrés,tres
+veinticuatro,tres
+veinticinco,tres
+veintiséis,tres
+veintisiete,tres
+veintiocho,tres
+veintinueve,tres
+treinta,tres
+treinta y uno,tres
+treinta y dos,tres
+treinta y tres,tres
+treinta y cuatro,tres
+treinta y cinco,tres
+treinta y seis,tres
+treinta y siete,tres
+treinta y ocho,tres
+treinta y nueve,tres
+cuarenta,tres
+cuarenta y uno,tres
+cuarenta y dos,tres
+cuarenta y tres,tres
+cuarenta y cuatro,tres
+cuarenta y cinco,tres
+cuarenta y seis,tres
+cuarenta y siete,tres
+cuarenta y ocho,tres
+cuarenta y nueve,tres
+cincuenta,tres
+cincuenta y uno,tres
+cincuenta y dos,tres
+cincuenta y tres,tres
+cincuenta y cuatro,tres
+cincuenta y cinco,tres
+cincuenta y seis,tres
+cincuenta y siete,tres
+cincuenta y ocho,tres
+cincuenta y nueve,tres
+uno,cuatro
+dos,cuatro
+tres,cuatro
+cuatro,cuatro
+cinco,cuatro
+seis,cuatro
+siete,cuatro
+ocho,cuatro
+nueve,cuatro
+diez,cuatro
+once,cuatro
+doce,cuatro
+trece,cuatro
+catorce,cuatro
+quince,cuatro
+dieciséis,cuatro
+diecisiete,cuatro
+dieciocho,cuatro
+diecinueve,cuatro
+veinte,cuatro
+veintiuno,cuatro
+veintidós,cuatro
+veintitrés,cuatro
+veinticuatro,cuatro
+veinticinco,cuatro
+veintiséis,cuatro
+veintisiete,cuatro
+veintiocho,cuatro
+veintinueve,cuatro
+treinta,cuatro
+treinta y uno,cuatro
+treinta y dos,cuatro
+treinta y tres,cuatro
+treinta y cuatro,cuatro
+treinta y cinco,cuatro
+treinta y seis,cuatro
+treinta y siete,cuatro
+treinta y ocho,cuatro
+treinta y nueve,cuatro
+cuarenta,cuatro
+cuarenta y uno,cuatro
+cuarenta y dos,cuatro
+cuarenta y tres,cuatro
+cuarenta y cuatro,cuatro
+cuarenta y cinco,cuatro
+cuarenta y seis,cuatro
+cuarenta y siete,cuatro
+cuarenta y ocho,cuatro
+cuarenta y nueve,cuatro
+cincuenta,cuatro
+cincuenta y uno,cuatro
+cincuenta y dos,cuatro
+cincuenta y tres,cuatro
+cincuenta y cuatro,cuatro
+cincuenta y cinco,cuatro
+cincuenta y seis,cuatro
+cincuenta y siete,cuatro
+cincuenta y ocho,cuatro
+cincuenta y nueve,cuatro
+uno,cinco
+dos,cinco
+tres,cinco
+cuatro,cinco
+cinco,cinco
+seis,cinco
+siete,cinco
+ocho,cinco
+nueve,cinco
+diez,cinco
+once,cinco
+doce,cinco
+trece,cinco
+catorce,cinco
+quince,cinco
+dieciséis,cinco
+diecisiete,cinco
+dieciocho,cinco
+diecinueve,cinco
+veinte,cinco
+veintiuno,cinco
+veintidós,cinco
+veintitrés,cinco
+veinticuatro,cinco
+veinticinco,cinco
+veintiséis,cinco
+veintisiete,cinco
+veintiocho,cinco
+veintinueve,cinco
+treinta,cinco
+treinta y uno,cinco
+treinta y dos,cinco
+treinta y tres,cinco
+treinta y cuatro,cinco
+treinta y cinco,cinco
+treinta y seis,cinco
+treinta y siete,cinco
+treinta y ocho,cinco
+treinta y nueve,cinco
+cuarenta,cinco
+cuarenta y uno,cinco
+cuarenta y dos,cinco
+cuarenta y tres,cinco
+cuarenta y cuatro,cinco
+cuarenta y cinco,cinco
+cuarenta y seis,cinco
+cuarenta y siete,cinco
+cuarenta y ocho,cinco
+cuarenta y nueve,cinco
+cincuenta,cinco
+cincuenta y uno,cinco
+cincuenta y dos,cinco
+cincuenta y tres,cinco
+cincuenta y cuatro,cinco
+cincuenta y cinco,cinco
+cincuenta y seis,cinco
+cincuenta y siete,cinco
+cincuenta y ocho,cinco
+cincuenta y nueve,cinco
+uno,seis
+dos,seis
+tres,seis
+cuatro,seis
+cinco,seis
+seis,seis
+siete,seis
+ocho,seis
+nueve,seis
+diez,seis
+once,seis
+doce,seis
+trece,seis
+catorce,seis
+quince,seis
+dieciséis,seis
+diecisiete,seis
+dieciocho,seis
+diecinueve,seis
+veinte,seis
+veintiuno,seis
+veintidós,seis
+veintitrés,seis
+veinticuatro,seis
+veinticinco,seis
+veintiséis,seis
+veintisiete,seis
+veintiocho,seis
+veintinueve,seis
+treinta,seis
+treinta y uno,seis
+treinta y dos,seis
+treinta y tres,seis
+treinta y cuatro,seis
+treinta y cinco,seis
+treinta y seis,seis
+treinta y siete,seis
+treinta y ocho,seis
+treinta y nueve,seis
+cuarenta,seis
+cuarenta y uno,seis
+cuarenta y dos,seis
+cuarenta y tres,seis
+cuarenta y cuatro,seis
+cuarenta y cinco,seis
+cuarenta y seis,seis
+cuarenta y siete,seis
+cuarenta y ocho,seis
+cuarenta y nueve,seis
+cincuenta,seis
+cincuenta y uno,seis
+cincuenta y dos,seis
+cincuenta y tres,seis
+cincuenta y cuatro,seis
+cincuenta y cinco,seis
+cincuenta y seis,seis
+cincuenta y siete,seis
+cincuenta y ocho,seis
+cincuenta y nueve,seis
+uno,siete
+dos,siete
+tres,siete
+cuatro,siete
+cinco,siete
+seis,siete
+siete,siete
+ocho,siete
+nueve,siete
+diez,siete
+once,siete
+doce,siete
+trece,siete
+catorce,siete
+quince,siete
+dieciséis,siete
+diecisiete,siete
+dieciocho,siete
+diecinueve,siete
+veinte,siete
+veintiuno,siete
+veintidós,siete
+veintitrés,siete
+veinticuatro,siete
+veinticinco,siete
+veintiséis,siete
+veintisiete,siete
+veintiocho,siete
+veintinueve,siete
+treinta,siete
+treinta y uno,siete
+treinta y dos,siete
+treinta y tres,siete
+treinta y cuatro,siete
+treinta y cinco,siete
+treinta y seis,siete
+treinta y siete,siete
+treinta y ocho,siete
+treinta y nueve,siete
+cuarenta,siete
+cuarenta y uno,siete
+cuarenta y dos,siete
+cuarenta y tres,siete
+cuarenta y cuatro,siete
+cuarenta y cinco,siete
+cuarenta y seis,siete
+cuarenta y siete,siete
+cuarenta y ocho,siete
+cuarenta y nueve,siete
+cincuenta,siete
+cincuenta y uno,siete
+cincuenta y dos,siete
+cincuenta y tres,siete
+cincuenta y cuatro,siete
+cincuenta y cinco,siete
+cincuenta y seis,siete
+cincuenta y siete,siete
+cincuenta y ocho,siete
+cincuenta y nueve,siete
+uno,ocho
+dos,ocho
+tres,ocho
+cuatro,ocho
+cinco,ocho
+seis,ocho
+siete,ocho
+ocho,ocho
+nueve,ocho
+diez,ocho
+once,ocho
+doce,ocho
+trece,ocho
+catorce,ocho
+quince,ocho
+dieciséis,ocho
+diecisiete,ocho
+dieciocho,ocho
+diecinueve,ocho
+veinte,ocho
+veintiuno,ocho
+veintidós,ocho
+veintitrés,ocho
+veinticuatro,ocho
+veinticinco,ocho
+veintiséis,ocho
+veintisiete,ocho
+veintiocho,ocho
+veintinueve,ocho
+treinta,ocho
+treinta y uno,ocho
+treinta y dos,ocho
+treinta y tres,ocho
+treinta y cuatro,ocho
+treinta y cinco,ocho
+treinta y seis,ocho
+treinta y siete,ocho
+treinta y ocho,ocho
+treinta y nueve,ocho
+cuarenta,ocho
+cuarenta y uno,ocho
+cuarenta y dos,ocho
+cuarenta y tres,ocho
+cuarenta y cuatro,ocho
+cuarenta y cinco,ocho
+cuarenta y seis,ocho
+cuarenta y siete,ocho
+cuarenta y ocho,ocho
+cuarenta y nueve,ocho
+cincuenta,ocho
+cincuenta y uno,ocho
+cincuenta y dos,ocho
+cincuenta y tres,ocho
+cincuenta y cuatro,ocho
+cincuenta y cinco,ocho
+cincuenta y seis,ocho
+cincuenta y siete,ocho
+cincuenta y ocho,ocho
+cincuenta y nueve,ocho
+uno,nueve
+dos,nueve
+tres,nueve
+cuatro,nueve
+cinco,nueve
+seis,nueve
+siete,nueve
+ocho,nueve
+nueve,nueve
+diez,nueve
+once,nueve
+doce,nueve
+trece,nueve
+catorce,nueve
+quince,nueve
+dieciséis,nueve
+diecisiete,nueve
+dieciocho,nueve
+diecinueve,nueve
+veinte,nueve
+veintiuno,nueve
+veintidós,nueve
+veintitrés,nueve
+veinticuatro,nueve
+veinticinco,nueve
+veintiséis,nueve
+veintisiete,nueve
+veintiocho,nueve
+veintinueve,nueve
+treinta,nueve
+treinta y uno,nueve
+treinta y dos,nueve
+treinta y tres,nueve
+treinta y cuatro,nueve
+treinta y cinco,nueve
+treinta y seis,nueve
+treinta y siete,nueve
+treinta y ocho,nueve
+treinta y nueve,nueve
+cuarenta,nueve
+cuarenta y uno,nueve
+cuarenta y dos,nueve
+cuarenta y tres,nueve
+cuarenta y cuatro,nueve
+cuarenta y cinco,nueve
+cuarenta y seis,nueve
+cuarenta y siete,nueve
+cuarenta y ocho,nueve
+cuarenta y nueve,nueve
+cincuenta,nueve
+cincuenta y uno,nueve
+cincuenta y dos,nueve
+cincuenta y tres,nueve
+cincuenta y cuatro,nueve
+cincuenta y cinco,nueve
+cincuenta y seis,nueve
+cincuenta y siete,nueve
+cincuenta y ocho,nueve
+cincuenta y nueve,nueve
+uno,diez
+dos,diez
+tres,diez
+cuatro,diez
+cinco,diez
+seis,diez
+siete,diez
+ocho,diez
+nueve,diez
+diez,diez
+once,diez
+doce,diez
+trece,diez
+catorce,diez
+quince,diez
+dieciséis,diez
+diecisiete,diez
+dieciocho,diez
+diecinueve,diez
+veinte,diez
+veintiuno,diez
+veintidós,diez
+veintitrés,diez
+veinticuatro,diez
+veinticinco,diez
+veintiséis,diez
+veintisiete,diez
+veintiocho,diez
+veintinueve,diez
+treinta,diez
+treinta y uno,diez
+treinta y dos,diez
+treinta y tres,diez
+treinta y cuatro,diez
+treinta y cinco,diez
+treinta y seis,diez
+treinta y siete,diez
+treinta y ocho,diez
+treinta y nueve,diez
+cuarenta,diez
+cuarenta y uno,diez
+cuarenta y dos,diez
+cuarenta y tres,diez
+cuarenta y cuatro,diez
+cuarenta y cinco,diez
+cuarenta y seis,diez
+cuarenta y siete,diez
+cuarenta y ocho,diez
+cuarenta y nueve,diez
+cincuenta,diez
+cincuenta y uno,diez
+cincuenta y dos,diez
+cincuenta y tres,diez
+cincuenta y cuatro,diez
+cincuenta y cinco,diez
+cincuenta y seis,diez
+cincuenta y siete,diez
+cincuenta y ocho,diez
+cincuenta y nueve,diez
+uno,once
+dos,once
+tres,once
+cuatro,once
+cinco,once
+seis,once
+siete,once
+ocho,once
+nueve,once
+diez,once
+once,once
+doce,once
+trece,once
+catorce,once
+quince,once
+dieciséis,once
+diecisiete,once
+dieciocho,once
+diecinueve,once
+veinte,once
+veintiuno,once
+veintidós,once
+veintitrés,once
+veinticuatro,once
+veinticinco,once
+veintiséis,once
+veintisiete,once
+veintiocho,once
+veintinueve,once
+treinta,once
+treinta y uno,once
+treinta y dos,once
+treinta y tres,once
+treinta y cuatro,once
+treinta y cinco,once
+treinta y seis,once
+treinta y siete,once
+treinta y ocho,once
+treinta y nueve,once
+cuarenta,once
+cuarenta y uno,once
+cuarenta y dos,once
+cuarenta y tres,once
+cuarenta y cuatro,once
+cuarenta y cinco,once
+cuarenta y seis,once
+cuarenta y siete,once
+cuarenta y ocho,once
+cuarenta y nueve,once
+cincuenta,once
+cincuenta y uno,once
+cincuenta y dos,once
+cincuenta y tres,once
+cincuenta y cuatro,once
+cincuenta y cinco,once
+cincuenta y seis,once
+cincuenta y siete,once
+cincuenta y ocho,once
+cincuenta y nueve,once
+uno,doce
+dos,doce
+tres,doce
+cuatro,doce
+cinco,doce
+seis,doce
+siete,doce
+ocho,doce
+nueve,doce
+diez,doce
+once,doce
+doce,doce
+trece,doce
+catorce,doce
+quince,doce
+dieciséis,doce
+diecisiete,doce
+dieciocho,doce
+diecinueve,doce
+veinte,doce
+veintiuno,doce
+veintidós,doce
+veintitrés,doce
+veinticuatro,doce
+veinticinco,doce
+veintiséis,doce
+veintisiete,doce
+veintiocho,doce
+veintinueve,doce
+treinta,doce
+treinta y uno,doce
+treinta y dos,doce
+treinta y tres,doce
+treinta y cuatro,doce
+treinta y cinco,doce
+treinta y seis,doce
+treinta y siete,doce
+treinta y ocho,doce
+treinta y nueve,doce
+cuarenta,doce
+cuarenta y uno,doce
+cuarenta y dos,doce
+cuarenta y tres,doce
+cuarenta y cuatro,doce
+cuarenta y cinco,doce
+cuarenta y seis,doce
+cuarenta y siete,doce
+cuarenta y ocho,doce
+cuarenta y nueve,doce
+cincuenta,doce
+cincuenta y uno,doce
+cincuenta y dos,doce
+cincuenta y tres,doce
+cincuenta y cuatro,doce
+cincuenta y cinco,doce
+cincuenta y seis,doce
+cincuenta y siete,doce
+cincuenta y ocho,doce
+cincuenta y nueve,doce

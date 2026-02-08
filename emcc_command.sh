@@ -1,0 +1,1 @@
+emcc main.cpp -o output.html -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s USE_SDL_MIXER=2 -s SDL2_IMAGE_FORMATS=["png"] --preload-file assets --preload-file data -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=65536000 -s USE_SQLITE3=1 -s WASM=1 -s NO_EXIT_RUNTIME=1 -O3

@@ -1,0 +1,26 @@
+# Build outputs
+build/
+SpanishGame
+*.o
+*.obj
+
+# CMake / Make generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Emscripten/web build artifacts
+output.data
+output.js
+output.wasm
+output.html
+
+# Local runtime/editor cruft
+.DS_Store
+*.log
+
+# Optional: ignore temporary/export assets
+*.tmp
+*.bak
