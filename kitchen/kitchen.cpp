@@ -8,9 +8,11 @@ Kitchen::Kitchen() :
     clockHourHandTexture(nullptr),
     clockMinuteHandTexture(nullptr),
     showingZoomedView(false),
-    minuteHandRotation(0.0f),
     hourHandRotation(0.0f),
-    lastHandRotationTime(0) {
+    minuteHandRotation(0.0f),
+    lastHandRotationTime(0),
+    selectedHour(12),
+    selectedMinute(0) {
 }
 
 Kitchen::~Kitchen() {
@@ -87,14 +89,65 @@ void Kitchen::setClockHandTextures(SDL_Texture* hourHand, SDL_Texture* minuteHan
 }
 
 void Kitchen::updateClockHands() {
-    Uint32 currentTime = SDL_GetTicks();
-    if (currentTime - lastHandRotationTime >= 1000) { // Every second
-        minuteHandRotation += 6.0f;  // Clockwise
-        hourHandRotation += 6.0f; // Clockwise
-        if (minuteHandRotation >= 360.0f) minuteHandRotation -= 360.0f;
-        if (hourHandRotation <= -360.0f) hourHandRotation += 360.0f;
-        lastHandRotationTime = currentTime;
+    lastHandRotationTime = SDL_GetTicks();
+}
+
+void Kitchen::setDisplayedTime(int hour, int minute) {
+    if (hour < 1 || hour > 12) {
+        hour = 12;
     }
+    if (minute < 0 || minute > 59) {
+        minute = 0;
+    }
+
+    selectedHour = hour;
+    selectedMinute = minute;
+
+    minuteHandRotation = minute * 6.0f;
+    hourHandRotation = ((hour % 12) * 30.0f) + (minute * 0.5f);
+}
+
+void Kitchen::resetDisplayedTime() {
+    setDisplayedTime(12, 0);
+}
+
+bool Kitchen::matchesTime(int hour, int minute) const {
+    return selectedHour == hour && selectedMinute == minute;
+}
+
+bool Kitchen::handleClockClick(int x, int y) {
+    if (!showingZoomedView || !isInClockFace(x, y)) {
+        return false;
+    }
+
+    const int clockCenterX = 503;
+    const int clockCenterY = 333;
+    const int innerRadiusThreshold = 135;
+    const float twoPi = 6.28318530717958647692f;
+    const float startAngle = -1.57079632679f;
+
+    const int dx = x - clockCenterX;
+    const int dy = y - clockCenterY;
+    const float radius = std::sqrt(static_cast<float>((dx * dx) + (dy * dy)));
+    float angle = std::atan2(static_cast<float>(dy), static_cast<float>(dx)) - startAngle;
+
+    while (angle < 0.0f) {
+        angle += twoPi;
+    }
+    while (angle >= twoPi) {
+        angle -= twoPi;
+    }
+
+    if (radius >= innerRadiusThreshold) {
+        int minute = static_cast<int>(std::lround((angle / twoPi) * 60.0f)) % 60;
+        setDisplayedTime(selectedHour, minute);
+    } else {
+        int hourIndex = static_cast<int>(std::lround((angle / twoPi) * 12.0f)) % 12;
+        int hour = (hourIndex == 0) ? 12 : hourIndex;
+        setDisplayedTime(hour, selectedMinute);
+    }
+
+    return true;
 }
 
 void Kitchen::renderClockHands(SDL_Renderer* renderer) {
@@ -103,38 +156,38 @@ void Kitchen::renderClockHands(SDL_Renderer* renderer) {
     const int clockCenterX = 503;
     const int clockCenterY = 333;
 
-    // Minute hand texture setup (minute_hand_nobg.png: 60x256 @ 0.70)
-    const int minuteHandWidth = (int)(60 * 0.70f);
-    const int minuteHandHeight = (int)(256 * 0.70f);
-    const int minutePivotX = 24;
-    const int minutePivotY = 149;
+    // Hour hand texture setup: short hand
+    const int hourHandWidth = (int)(60 * 0.70f);
+    const int hourHandHeight = (int)(256 * 0.70f);
+    const int hourPivotX = 24;
+    const int hourPivotY = 149;
 
-    // Hour hand texture setup (hour_hand_nobg.png: 142x504 @ 0.50)
-    const int hourHandWidth = (int)(142 * 0.50f);
-    const int hourHandHeight = (int)(504 * 0.50f);
-    const int hourPivotX = 56;
-    const int hourPivotY = 320;
+    // Minute hand texture setup: long hand
+    const int minuteHandWidth = (int)(142 * 0.20f);
+    const int minuteHandHeight = (int)(504 * 0.50f);
+    const int minutePivotX = (int)(56 * 0.40f);
+    const int minutePivotY = 320;
 
     SDL_Rect minuteHandRect;
     minuteHandRect.w = minuteHandWidth;
     minuteHandRect.h = minuteHandHeight;
-    minuteHandRect.x = clockCenterX - (int)(minutePivotX * 0.70f);
-    minuteHandRect.y = clockCenterY - (int)(minutePivotY * 0.70f);
+    minuteHandRect.x = clockCenterX - (int)(minutePivotX * 0.50f);
+    minuteHandRect.y = clockCenterY - (int)(minutePivotY * 0.50f);
 
     SDL_Rect hourHandRect;
     hourHandRect.w = hourHandWidth;
     hourHandRect.h = hourHandHeight;
-    hourHandRect.x = clockCenterX - (int)(hourPivotX * 0.50f);
-    hourHandRect.y = clockCenterY - (int)(hourPivotY * 0.50f);
+    hourHandRect.x = clockCenterX - (int)(hourPivotX * 0.70f);
+    hourHandRect.y = clockCenterY - (int)(hourPivotY * 0.70f);
 
     SDL_Point minuteCenter = {
-        (int)(minutePivotX * 0.70f),
-        (int)(minutePivotY * 0.70f)
+        (int)(minutePivotX * 0.50f),
+        (int)(minutePivotY * 0.50f)
     };
 
     SDL_Point hourCenter = {
-        (int)(hourPivotX * 0.50f),
-        (int)(hourPivotY * 0.50f)
+        (int)(hourPivotX * 0.70f),
+        (int)(hourPivotY * 0.70f)
     };
 
     // Render order preserved from latest tuning: hour first, then minute on top
@@ -243,4 +296,21 @@ bool Kitchen::isInClockHoverArea(int x, int y) const {
     const int HOVER_RADIUS = 50; // Adjust this for the size of the hover area
     return (x >= 530 - HOVER_RADIUS && x <= 530 + HOVER_RADIUS &&
             y >= 218 - HOVER_RADIUS && y <= 218 + HOVER_RADIUS);
+}
+
+bool Kitchen::isInClockFace(int x, int y) const {
+    if (!showingZoomedView) {
+        return false;
+    }
+
+    const int clockCenterX = 503;
+    const int clockCenterY = 333;
+    const int minRadius = 55;
+    const int maxRadius = 235;
+    const int dx = x - clockCenterX;
+    const int dy = y - clockCenterY;
+    const int distanceSquared = (dx * dx) + (dy * dy);
+
+    return distanceSquared >= (minRadius * minRadius) &&
+           distanceSquared <= (maxRadius * maxRadius);
 }

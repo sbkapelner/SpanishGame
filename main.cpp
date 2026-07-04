@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <functional>
 #include <cctype>
+#include <iomanip>
+#include <sstream>
 #include <sqlite3.h>
 
 #ifdef __EMSCRIPTEN__
@@ -29,6 +31,17 @@ void resetGameState();
 void cycleTargetWord();
 std::string maskTargetWord(const std::string& sentence, const std::string& targetWord);
 void handleMouseMotion(SDL_Event& event);
+bool loadTimeQuestions();
+void selectRandomTimeQuestion();
+void updateTimeQuestionDisplay();
+void clearTimeFeedback();
+void renderTimeGameUI();
+bool isMouseOverRect(int mouseX, int mouseY, const SDL_Rect& rect);
+void cleanupTimeTextures();
+void updateTimeBlankUI();
+void updateTimeDebugTexture();
+void resetTimeGameState();
+void startTimeGame();
 
 // Blinking animation structure
 struct BlinkingSprite {
@@ -135,6 +148,15 @@ struct BlinkingSprite {
             startFadeIn(); // Start fade in when changing screens
         }
     }
+
+    void setCustomPosition(int x, int y, SDL_RendererFlip flip) {
+        positions.x = x;
+        positions.y = y;
+        flipState = flip;
+        rect.x = positions.x;
+        rect.y = positions.y;
+        startFadeIn();
+    }
     
     void update() {
         Uint32 currentTime = SDL_GetTicks();
@@ -207,6 +229,31 @@ struct SentencePair {
     int target_word_id;
 };
 
+struct TimeQuestion {
+    int id;
+    int pattern_id;
+    std::string promptTemplate;
+    int hour;
+    int minute;
+    std::vector<std::string> slotAnswers;
+    std::vector<int> slotAnswerValues;
+};
+
+struct TimeBlankState {
+    std::string answer;
+    int answerValue;
+    std::vector<std::string> options;
+    int selectedIndex;
+    SDL_Rect viewportRect;
+    int gradeState;
+};
+
+struct TimeTextSegment {
+    std::string text;
+    SDL_Texture* texture;
+    SDL_Rect rect;
+};
+
 // Game state structure
 struct GameState {
     SDL_Window* window;
@@ -217,6 +264,10 @@ struct GameState {
     SDL_Texture* spanishTextTexture;
     SDL_Texture* englishTextTexture;
     SDL_Texture* targetWordTexture;
+    SDL_Texture* timePromptTexture;
+    SDL_Texture* timeCheckButtonTexture;
+    SDL_Texture* timeDebugTexture;
+    SDL_Texture* timeStartTextTexture;
     SDL_Texture* iconTexture;
     SDL_Texture* mainScreenTexture;
     SDL_Texture* libraryScreenTexture;
@@ -238,6 +289,12 @@ struct GameState {
     SDL_Rect spanishTextRect;
     SDL_Rect englishTextRect;
     SDL_Rect targetWordRect;
+    SDL_Rect timePromptRect;
+    SDL_Rect timeCheckButtonRect;
+    SDL_Rect timeCheckTextRect;
+    SDL_Rect timeDebugRect;
+    SDL_Rect timeStartButtonRect;
+    SDL_Rect timeStartTextRect;
     SDL_Rect originalButtonRect;
     SDL_Rect iconRect;
     SDL_Rect mainScreenRect;
@@ -258,7 +315,14 @@ struct GameState {
     std::vector<SentencePair> sentences;
     std::vector<TargetWord> target_words;
     std::vector<int> current_word_choices;
+    std::vector<TimeQuestion> timeQuestions;
+    std::vector<TimeBlankState> currentTimeBlanks;
+    std::vector<TimeTextSegment> currentTimeSegments;
+    std::vector<std::string> timeClockHourOptions;
+    std::vector<std::string> timeGenericHourOptions;
+    std::vector<std::string> timeMinuteOptions;
     int currentSentence;
+    int currentTimeQuestion;
     int currentTargetWordIndex;
     bool answerFeedback;
     bool showingFeedback;
@@ -280,6 +344,10 @@ struct GameState {
     bool showingGameScreen;
     bool showingAttic;  // New: Attic state
     bool showingKitchen;  // Kitchen state
+    bool showingTimeFeedback;
+    bool timeAnswerCorrect;
+    Uint32 timeFeedbackStartTime;
+    bool timeGameStarted;
 };
 
 GameState state;
@@ -313,6 +381,154 @@ SDL_Rect calculateCenteredRect(int textureWidth, int textureHeight, int screenWi
 bool isMouseOverButton(int mouseX, int mouseY, const SDL_Rect& rect) {
     return (mouseX >= rect.x && mouseX <= rect.x + rect.w &&
             mouseY >= rect.y && mouseY <= rect.y + rect.h);
+}
+
+bool isMouseOverRect(int mouseX, int mouseY, const SDL_Rect& rect) {
+    return mouseX >= rect.x && mouseX <= rect.x + rect.w &&
+           mouseY >= rect.y && mouseY <= rect.y + rect.h;
+}
+
+std::string replaceAll(std::string text, const std::string& from, const std::string& to) {
+    size_t startPos = 0;
+    while ((startPos = text.find(from, startPos)) != std::string::npos) {
+        text.replace(startPos, from.length(), to);
+        startPos += to.length();
+    }
+    return text;
+}
+
+std::string normalizeSpanishNumberText(std::string text) {
+    text = replaceAll(text, "\xC3\xA1", "a");
+    text = replaceAll(text, "\xC3\xA9", "e");
+    text = replaceAll(text, "\xC3\xAD", "i");
+    text = replaceAll(text, "\xC3\xB3", "o");
+    text = replaceAll(text, "\xC3\xBA", "u");
+    text = replaceAll(text, "\xC3\xB1", "n");
+
+    std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+
+    while (!text.empty() && std::isspace(static_cast<unsigned char>(text.front()))) {
+        text.erase(text.begin());
+    }
+    while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back()))) {
+        text.pop_back();
+    }
+
+    return text;
+}
+
+int parseSpanishNumber(const std::string& input) {
+    const std::string text = normalizeSpanishNumberText(input);
+    static const std::vector<std::pair<std::string, int>> directMap = {
+        {"la una", 1}, {"una", 1}, {"uno", 1}, {"dos", 2}, {"tres", 3}, {"cuatro", 4},
+        {"cinco", 5}, {"seis", 6}, {"siete", 7}, {"ocho", 8}, {"nueve", 9}, {"diez", 10},
+        {"once", 11}, {"doce", 12}, {"trece", 13}, {"catorce", 14}, {"quince", 15},
+        {"dieciseis", 16}, {"diecisiete", 17}, {"dieciocho", 18}, {"diecinueve", 19},
+        {"veinte", 20}, {"veintiuno", 21}, {"veintidos", 22}, {"veintitres", 23},
+        {"veinticuatro", 24}, {"veinticinco", 25}, {"veintiseis", 26}, {"veintisiete", 27},
+        {"veintiocho", 28}, {"veintinueve", 29}, {"treinta", 30}, {"cuarenta", 40},
+        {"cincuenta", 50}
+    };
+
+    for (const auto& entry : directMap) {
+        if (entry.first == text) {
+            return entry.second;
+        }
+    }
+
+    static const std::vector<std::pair<std::string, int>> tensMap = {
+        {"treinta y ", 30}, {"cuarenta y ", 40}, {"cincuenta y ", 50}
+    };
+
+    for (const auto& entry : tensMap) {
+        if (text.rfind(entry.first, 0) == 0) {
+            const int unit = parseSpanishNumber(text.substr(entry.first.length()));
+            if (unit >= 1 && unit <= 9) {
+                return entry.second + unit;
+            }
+        }
+    }
+
+    return -1;
+}
+
+std::string fillTimePattern(std::string pattern, const std::string& firstValue, const std::string& secondValue) {
+    const size_t firstBlank = pattern.find("____");
+    if (firstBlank != std::string::npos) {
+        pattern.replace(firstBlank, 4, firstValue);
+    }
+
+    if (!secondValue.empty()) {
+        const size_t secondBlank = pattern.find("____");
+        if (secondBlank != std::string::npos) {
+            pattern.replace(secondBlank, 4, secondValue);
+        }
+    }
+
+    return pattern;
+}
+
+void addUniqueString(std::vector<std::string>& values, const std::string& value) {
+    if (std::find(values.begin(), values.end(), value) == values.end()) {
+        values.push_back(value);
+    }
+}
+
+std::vector<std::string> splitTimeTemplate(const std::string& patternTemplate) {
+    std::vector<std::string> parts;
+    size_t start = 0;
+    size_t pos = patternTemplate.find("____");
+
+    while (pos != std::string::npos) {
+        parts.push_back(patternTemplate.substr(start, pos - start));
+        start = pos + 4;
+        pos = patternTemplate.find("____", start);
+    }
+
+    parts.push_back(patternTemplate.substr(start));
+    return parts;
+}
+
+void sortTimeOptionPool(std::vector<std::string>& values) {
+    std::sort(values.begin(), values.end(), [](const std::string& a, const std::string& b) {
+        const int aValue = parseSpanishNumber(a);
+        const int bValue = parseSpanishNumber(b);
+        if (aValue != bValue) {
+            return aValue < bValue;
+        }
+        return a < b;
+    });
+}
+
+void drawButtonRect(SDL_Renderer* renderer, const SDL_Rect& rect, SDL_Color fillColor, SDL_Color outlineColor) {
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, fillColor.r, fillColor.g, fillColor.b, fillColor.a);
+    SDL_RenderFillRect(renderer, &rect);
+    SDL_SetRenderDrawColor(renderer, outlineColor.r, outlineColor.g, outlineColor.b, outlineColor.a);
+    SDL_RenderDrawRect(renderer, &rect);
+}
+
+void cleanupTimeTextures() {
+    state.currentTimeBlanks.clear();
+    for (TimeTextSegment& segment : state.currentTimeSegments) {
+        if (segment.texture) {
+            SDL_DestroyTexture(segment.texture);
+            segment.texture = nullptr;
+        }
+    }
+    state.currentTimeSegments.clear();
+}
+
+void stepTimeBlank(TimeBlankState& blank, int direction) {
+    if (blank.options.empty()) {
+        return;
+    }
+
+    const int optionCount = static_cast<int>(blank.options.size());
+    blank.selectedIndex = (blank.selectedIndex + direction + optionCount) % optionCount;
+    blank.gradeState = 0;
 }
 
 void updateButtonAnimation() {
@@ -1043,12 +1259,14 @@ void handleEvents(SDL_Event& e, GameState& state) {
                         state.blinkingSprite.startFadeOut([&]() {
                             std::cout << "Transitioning back to kitchen view..." << std::endl;
                             kitchen.toggleZoom();
+                            resetTimeGameState();
                             state.blinkingSprite.setScreen(4); // Back to kitchen position
                         });
                     } else {
                         // Start fade out and transition to main screen when complete
                         state.blinkingSprite.startFadeOut([&]() {
                             std::cout << "Transitioning back to main screen from kitchen..." << std::endl;
+                            resetTimeGameState();
                             state.showingKitchen = false;
                             state.showingMainScreen = true;
                             state.blinkingSprite.setScreen(0); // Set to main screen position
@@ -1059,8 +1277,52 @@ void handleEvents(SDL_Event& e, GameState& state) {
                     state.blinkingSprite.startFadeOut([&]() {
                         std::cout << "Transitioning to clock zoom view..." << std::endl;
                         kitchen.toggleZoom();
-                        state.blinkingSprite.setScreen(4); // Keep kitchen position for now
+                        resetTimeGameState();
+                        state.blinkingSprite.setCustomPosition(20, 200, SDL_FLIP_HORIZONTAL);
                     });
+                } else if (kitchen.isZoomed() && !state.timeGameStarted) {
+                    if (isMouseOverRect(mouseX, mouseY, state.timeStartButtonRect)) {
+                        startTimeGame();
+                    }
+                } else if (kitchen.isZoomed()) {
+                    bool handledBlankClick = false;
+                    for (TimeBlankState& blank : state.currentTimeBlanks) {
+                        if (isMouseOverRect(mouseX, mouseY, blank.viewportRect) && !blank.options.empty()) {
+                            const int midpointY = blank.viewportRect.y + (blank.viewportRect.h / 2);
+                            if (mouseY < midpointY) {
+                                stepTimeBlank(blank, -1);
+                            } else {
+                                stepTimeBlank(blank, 1);
+                            }
+                            handledBlankClick = true;
+                            break;
+                        }
+                    }
+
+                    if (handledBlankClick) {
+                        // No-op
+                    } else if (isMouseOverRect(mouseX, mouseY, state.timeCheckButtonRect) &&
+                        state.currentTimeQuestion >= 0 &&
+                        state.currentTimeQuestion < static_cast<int>(state.timeQuestions.size())) {
+                        const TimeQuestion& question = state.timeQuestions[state.currentTimeQuestion];
+                        state.timeAnswerCorrect = state.currentTimeBlanks.size() == question.slotAnswers.size();
+                        for (size_t i = 0; i < state.currentTimeBlanks.size(); ++i) {
+                            const bool isCorrect = state.currentTimeBlanks[i].options[state.currentTimeBlanks[i].selectedIndex] == question.slotAnswers[i];
+                            state.currentTimeBlanks[i].gradeState = isCorrect ? 1 : -1;
+                            if (!isCorrect) {
+                                state.timeAnswerCorrect = false;
+                            }
+                        }
+
+                        if (state.timeAnswerCorrect) {
+                            state.showingTimeFeedback = true;
+                            state.timeFeedbackStartTime = SDL_GetTicks();
+                            Mix_PlayChannel(-1, state.correctSound, 0);
+                        } else {
+                            state.showingTimeFeedback = false;
+                            Mix_PlayChannel(-1, state.incorrectSound, 0);
+                        }
+                    }
                 }
             }
             else if (state.showingAttic && inBottomLeftCorner) {
@@ -1071,6 +1333,19 @@ void handleEvents(SDL_Event& e, GameState& state) {
                     state.showingMainScreen = true;
                     state.blinkingSprite.setScreen(0); // Set to main screen position
                 });
+            }
+        }
+    }
+    else if (e.type == SDL_MOUSEWHEEL) {
+    if (state.showingKitchen && kitchen.isZoomed() && state.timeGameStarted) {
+        int mouseX = 0;
+        int mouseY = 0;
+        SDL_GetMouseState(&mouseX, &mouseY);
+        for (TimeBlankState& blank : state.currentTimeBlanks) {
+            if (isMouseOverRect(mouseX, mouseY, blank.viewportRect) && !blank.options.empty()) {
+                    stepTimeBlank(blank, e.wheel.y > 0 ? -1 : 1);
+                    break;
+                }
             }
         }
     }
@@ -1142,6 +1417,17 @@ void mainLoop() {
         selectNewWordChoices();
         updateTargetWordDisplay();
     }
+
+    if (state.showingTimeFeedback) {
+        Uint32 currentTime = SDL_GetTicks();
+        if (currentTime - state.timeFeedbackStartTime > 1200) {
+            const bool wasCorrect = state.timeAnswerCorrect;
+            clearTimeFeedback();
+            if (wasCorrect) {
+                selectRandomTimeQuestion();
+            }
+        }
+    }
     
     updateButtonAnimation();
     updateSprite();
@@ -1183,6 +1469,7 @@ void mainLoop() {
         SDL_RenderCopy(state.renderer, state.kitchenTexture, NULL, &state.kitchenRect);
         kitchen.updateClockHands();
         kitchen.render(state.renderer);
+        renderTimeGameUI();
         state.blinkingSprite.update();
         state.blinkingSprite.render(state.renderer);
         
@@ -1286,6 +1573,19 @@ void handleMouseMotion(SDL_Event& event) {
         // Show hand cursor for clock area and back button
         if (!kitchen.isZoomed() && kitchen.isInClockHoverArea(mouseX, mouseY)) {
             cursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
+        } else if (kitchen.isZoomed() && !state.timeGameStarted &&
+                   isMouseOverRect(mouseX, mouseY, state.timeStartButtonRect)) {
+            cursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
+        } else if (kitchen.isZoomed() && state.timeGameStarted &&
+                   isMouseOverRect(mouseX, mouseY, state.timeCheckButtonRect)) {
+            cursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
+        } else if (kitchen.isZoomed() && state.timeGameStarted) {
+            for (const TimeBlankState& blank : state.currentTimeBlanks) {
+                if (isMouseOverRect(mouseX, mouseY, blank.viewportRect)) {
+                    cursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
+                    break;
+                }
+            }
         } else if (inBottomLeftCorner) {
             cursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
         }
@@ -1438,6 +1738,492 @@ bool loadSentences() {
     selectNewWordChoices();
 
     return true;
+}
+
+bool loadTimeQuestions() {
+    sqlite3* db;
+#ifdef __EMSCRIPTEN__
+    int rc = sqlite3_open("data/spanish_game.db", &db);
+#else
+    int rc = sqlite3_open("../data/spanish_game.db", &db);
+#endif
+    if (rc) {
+        std::cout << "Can't open database for time questions: " << sqlite3_errmsg(db) << std::endl;
+        return false;
+    }
+
+    const char* sql =
+        "SELECT e.id, e.pattern_id, p.pattern_template, e.hour, e.minute "
+        "FROM time_expressions e "
+        "JOIN time_patterns p ON p.id = e.pattern_id "
+        "ORDER BY RANDOM();";
+
+    sqlite3_stmt* stmt;
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        std::cout << "Failed to fetch time questions: " << sqlite3_errmsg(db) << std::endl;
+        sqlite3_close(db);
+        return false;
+    }
+
+    state.timeQuestions.clear();
+    state.timeClockHourOptions.clear();
+    state.timeGenericHourOptions.clear();
+    state.timeMinuteOptions.clear();
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const int id = sqlite3_column_int(stmt, 0);
+        const int patternId = sqlite3_column_int(stmt, 1);
+        const char* patternText = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        const char* firstText = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        const char* secondText = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+
+        const std::string patternTemplate = patternText ? patternText : "";
+        const std::string firstValue = firstText ? firstText : "";
+        const std::string secondValue = secondText ? secondText : "";
+
+        int hour = -1;
+        int minute = 0;
+
+        switch (patternId) {
+            case 1:
+            case 5:
+                hour = parseSpanishNumber(firstValue);
+                minute = 0;
+                break;
+            case 2:
+            case 7:
+                hour = parseSpanishNumber(firstValue);
+                minute = parseSpanishNumber(secondValue);
+                break;
+            case 3:
+            case 4: {
+                const int minutesToHour = parseSpanishNumber(firstValue);
+                const int upcomingHour = parseSpanishNumber(secondValue);
+                hour = upcomingHour - 1;
+                if (hour == 0) {
+                    hour = 12;
+                }
+                minute = 60 - minutesToHour;
+                break;
+            }
+            case 6: {
+                const int displayedHour = parseSpanishNumber(firstValue);
+                const int minutesToHour = parseSpanishNumber(secondValue);
+                hour = displayedHour - 1;
+                if (hour == 0) {
+                    hour = 12;
+                }
+                minute = 60 - minutesToHour;
+                break;
+            }
+            default:
+                break;
+        }
+
+        if (hour < 1 || hour > 12 || minute < 0 || minute > 59) {
+            continue;
+        }
+
+        TimeQuestion question;
+        question.id = id;
+        question.pattern_id = patternId;
+        question.promptTemplate = patternTemplate;
+        question.hour = hour;
+        question.minute = minute;
+
+        switch (patternId) {
+            case 1:
+            case 5:
+                question.slotAnswers = {firstValue};
+                addUniqueString(state.timeClockHourOptions, firstValue);
+                break;
+            case 2:
+            case 7:
+                question.slotAnswers = {firstValue, secondValue};
+                addUniqueString(state.timeGenericHourOptions, firstValue);
+                addUniqueString(state.timeMinuteOptions, secondValue);
+                break;
+            case 3:
+            case 4:
+                question.slotAnswers = {firstValue, secondValue};
+                addUniqueString(state.timeMinuteOptions, firstValue);
+                addUniqueString(state.timeGenericHourOptions, secondValue);
+                break;
+            case 6:
+                question.slotAnswers = {firstValue, secondValue};
+                addUniqueString(state.timeGenericHourOptions, firstValue);
+                addUniqueString(state.timeMinuteOptions, secondValue);
+                break;
+            default:
+                break;
+        }
+
+        state.timeQuestions.push_back(question);
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+
+    sortTimeOptionPool(state.timeClockHourOptions);
+    sortTimeOptionPool(state.timeGenericHourOptions);
+    sortTimeOptionPool(state.timeMinuteOptions);
+
+    std::cout << "Loaded " << state.timeQuestions.size() << " time questions" << std::endl;
+    return !state.timeQuestions.empty();
+}
+
+void clearTimeFeedback() {
+    for (TimeBlankState& blank : state.currentTimeBlanks) {
+        blank.gradeState = 0;
+    }
+    state.showingTimeFeedback = false;
+    state.timeAnswerCorrect = false;
+    state.timeFeedbackStartTime = 0;
+}
+
+void updateTimeBlankUI() {
+    cleanupTimeTextures();
+
+    if (state.currentTimeQuestion < 0 || state.currentTimeQuestion >= static_cast<int>(state.timeQuestions.size())) {
+        return;
+    }
+
+    const TimeQuestion& question = state.timeQuestions[state.currentTimeQuestion];
+    const std::vector<std::string> parts = splitTimeTemplate(question.promptTemplate);
+    if (parts.size() != question.slotAnswers.size() + 1) {
+        return;
+    }
+
+    const int blankWidth = 196;
+    const int blankHeight = 72;
+    const int targetScrollerCenterX = 645;
+    const int targetScrollerCenterY = 650;
+    const int gapAfterBlank = 4;
+
+    std::vector<int> partWidths(parts.size(), 0);
+    int totalWidth = 0;
+    for (size_t i = 0; i < parts.size(); ++i) {
+        int textWidth = 0;
+        int textHeight = 0;
+        TTF_SizeUTF8(state.font, parts[i].c_str(), &textWidth, &textHeight);
+        partWidths[i] = textWidth;
+        totalWidth += textWidth;
+    }
+    totalWidth += static_cast<int>(question.slotAnswers.size()) * blankWidth;
+    totalWidth += static_cast<int>(question.slotAnswers.size()) * gapAfterBlank;
+
+    int cursorX = (SCREEN_WIDTH - totalWidth) / 2;
+    const int baselineY = targetScrollerCenterY - (blankHeight / 2);
+
+    for (size_t i = 0; i < question.slotAnswers.size(); ++i) {
+        if (!parts[i].empty()) {
+            TimeTextSegment segment;
+            segment.text = parts[i];
+            segment.texture = createTextTexture(segment.text, {20, 20, 20, 255});
+            if (segment.texture) {
+                int textWidth = 0;
+                int textHeight = 0;
+                SDL_QueryTexture(segment.texture, nullptr, nullptr, &textWidth, &textHeight);
+                segment.rect = {cursorX, baselineY + (blankHeight / 2) - (textHeight / 2), textWidth, textHeight};
+                state.currentTimeSegments.push_back(segment);
+            }
+            cursorX += partWidths[i];
+        }
+
+        TimeBlankState blank;
+        blank.answer = question.slotAnswers[i];
+        blank.answerValue = parseSpanishNumber(question.slotAnswers[i]);
+        blank.selectedIndex = 0;
+        blank.gradeState = 0;
+
+        const bool useClockHours = (question.pattern_id == 1 || question.pattern_id == 5) && i == 0;
+        const bool useMinutePool = (question.pattern_id == 2 || question.pattern_id == 3 ||
+                                    question.pattern_id == 4 || question.pattern_id == 6 ||
+                                    question.pattern_id == 7) &&
+                                   ((question.pattern_id == 2 || question.pattern_id == 7 || question.pattern_id == 6) ? i == 1 : i == 0);
+
+        if (useClockHours) {
+            blank.options = state.timeClockHourOptions;
+        } else if (useMinutePool) {
+            blank.options = state.timeMinuteOptions;
+        } else {
+            blank.options = state.timeGenericHourOptions;
+        }
+
+        if (blank.options.empty()) {
+            cursorX += blankWidth;
+            continue;
+        }
+
+        auto selectedIt = std::find(blank.options.begin(), blank.options.end(), blank.answer);
+        if (selectedIt != blank.options.end()) {
+            blank.selectedIndex = static_cast<int>(std::distance(blank.options.begin(), selectedIt));
+        }
+
+        blank.viewportRect = {cursorX, baselineY, blankWidth, blankHeight};
+
+        state.currentTimeBlanks.push_back(blank);
+        cursorX += blankWidth + gapAfterBlank;
+    }
+
+    if (!parts.back().empty()) {
+        TimeTextSegment segment;
+        segment.text = parts.back();
+        segment.texture = createTextTexture(segment.text, {20, 20, 20, 255});
+        if (segment.texture) {
+            int textWidth = 0;
+            int textHeight = 0;
+            SDL_QueryTexture(segment.texture, nullptr, nullptr, &textWidth, &textHeight);
+            segment.rect = {cursorX, baselineY + (blankHeight / 2) - (textHeight / 2), textWidth, textHeight};
+            state.currentTimeSegments.push_back(segment);
+        }
+    }
+
+    if (!state.currentTimeBlanks.empty()) {
+        const SDL_Rect& firstBlank = state.currentTimeBlanks.front().viewportRect;
+        const SDL_Rect& lastBlank = state.currentTimeBlanks.back().viewportRect;
+        const int scrollerLeft = firstBlank.x;
+        const int scrollerRight = lastBlank.x + lastBlank.w;
+        const int currentScrollerCenterX = (scrollerLeft + scrollerRight) / 2;
+        const int shiftX = targetScrollerCenterX - currentScrollerCenterX;
+
+        for (TimeBlankState& blank : state.currentTimeBlanks) {
+            blank.viewportRect.x += shiftX;
+        }
+        for (TimeTextSegment& segment : state.currentTimeSegments) {
+            segment.rect.x += shiftX;
+        }
+
+        const SDL_Rect& shiftedFirstBlank = state.currentTimeBlanks.front().viewportRect;
+        const SDL_Rect& shiftedLastBlank = state.currentTimeBlanks.back().viewportRect;
+        int leftEdge = shiftedFirstBlank.x;
+        int rightEdge = shiftedLastBlank.x + shiftedLastBlank.w;
+        for (const TimeTextSegment& segment : state.currentTimeSegments) {
+            leftEdge = std::min(leftEdge, segment.rect.x);
+            rightEdge = std::max(rightEdge, segment.rect.x + segment.rect.w);
+        }
+
+        state.timePromptRect = {
+            leftEdge,
+            shiftedFirstBlank.y,
+            rightEdge - leftEdge,
+            blankHeight
+        };
+        state.timeCheckButtonRect.x = shiftedLastBlank.x + shiftedLastBlank.w + 24;
+        state.timeCheckButtonRect.y = shiftedFirstBlank.y + (shiftedFirstBlank.h - state.timeCheckButtonRect.h) / 2;
+        state.timeCheckTextRect.x = state.timeCheckButtonRect.x + (state.timeCheckButtonRect.w - state.timeCheckTextRect.w) / 2;
+        state.timeCheckTextRect.y = state.timeCheckButtonRect.y + (state.timeCheckButtonRect.h - state.timeCheckTextRect.h) / 2;
+    }
+}
+
+void updateTimeQuestionDisplay() {
+    if (state.timePromptTexture) {
+        SDL_DestroyTexture(state.timePromptTexture);
+        state.timePromptTexture = nullptr;
+    }
+
+    if (state.currentTimeQuestion < 0 || state.currentTimeQuestion >= static_cast<int>(state.timeQuestions.size())) {
+        return;
+    }
+
+    updateTimeBlankUI();
+    updateTimeDebugTexture();
+}
+
+void updateTimeDebugTexture() {
+    if (state.timeDebugTexture) {
+        SDL_DestroyTexture(state.timeDebugTexture);
+        state.timeDebugTexture = nullptr;
+    }
+
+    if (state.currentTimeQuestion < 0 || state.currentTimeQuestion >= static_cast<int>(state.timeQuestions.size())) {
+        return;
+    }
+
+    const TimeQuestion& question = state.timeQuestions[state.currentTimeQuestion];
+    std::ostringstream stream;
+    stream << "DB time "
+           << question.hour << ':'
+           << std::setw(2) << std::setfill('0') << question.minute
+           << " | display "
+           << kitchen.getDisplayedHour() << ':'
+           << std::setw(2) << std::setfill('0') << kitchen.getDisplayedMinute()
+           << " | minute angle " << std::fixed << std::setprecision(1) << kitchen.getMinuteHandRotation()
+           << " | hour angle " << std::fixed << std::setprecision(1) << kitchen.getHourHandRotation();
+
+    state.timeDebugTexture = createTextTexture(stream.str(), {20, 20, 20, 255}, 820);
+    if (!state.timeDebugTexture) {
+        return;
+    }
+
+    int width = 0;
+    int height = 0;
+    SDL_QueryTexture(state.timeDebugTexture, nullptr, nullptr, &width, &height);
+    state.timeDebugRect = {40, SCREEN_HEIGHT - 48, width, height};
+}
+
+void selectRandomTimeQuestion() {
+    if (state.timeQuestions.empty()) {
+        state.currentTimeQuestion = -1;
+        return;
+    }
+
+    state.currentTimeQuestion = rand() % state.timeQuestions.size();
+    clearTimeFeedback();
+    const TimeQuestion& question = state.timeQuestions[state.currentTimeQuestion];
+    kitchen.setDisplayedTime(question.hour, question.minute);
+    updateTimeQuestionDisplay();
+}
+
+void resetTimeGameState() {
+    state.timeGameStarted = false;
+    state.currentTimeQuestion = -1;
+    clearTimeFeedback();
+    cleanupTimeTextures();
+    if (state.timePromptTexture) {
+        SDL_DestroyTexture(state.timePromptTexture);
+        state.timePromptTexture = nullptr;
+    }
+    if (state.timeDebugTexture) {
+        SDL_DestroyTexture(state.timeDebugTexture);
+        state.timeDebugTexture = nullptr;
+    }
+    kitchen.resetDisplayedTime();
+    Mix_HaltMusic();
+}
+
+void startTimeGame() {
+    state.timeGameStarted = true;
+    Mix_PlayMusic(state.backgroundMusic, -1);
+    selectRandomTimeQuestion();
+}
+
+void renderTimeGameUI() {
+    if (!kitchen.isZoomed()) {
+        return;
+    }
+
+    if (!state.timeGameStarted) {
+        SDL_RenderCopy(state.renderer, state.buttonTexture, nullptr, &state.timeStartButtonRect);
+        SDL_RenderCopy(state.renderer, state.timeStartTextTexture, nullptr, &state.timeStartTextRect);
+        if (state.timeDebugTexture) {
+            SDL_Rect debugPanel = {
+                state.timeDebugRect.x - 12,
+                state.timeDebugRect.y - 8,
+                state.timeDebugRect.w + 24,
+                state.timeDebugRect.h + 16
+            };
+            SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(state.renderer, 255, 255, 255, 220);
+            SDL_RenderFillRect(state.renderer, &debugPanel);
+            SDL_SetRenderDrawColor(state.renderer, 220, 220, 220, 255);
+            SDL_RenderDrawRect(state.renderer, &debugPanel);
+            SDL_RenderCopy(state.renderer, state.timeDebugTexture, nullptr, &state.timeDebugRect);
+        }
+        return;
+    }
+
+    updateTimeDebugTexture();
+
+    SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(state.renderer, 255, 248, 235, 230);
+
+    SDL_Rect promptPanel = {
+        state.timePromptRect.x - 20,
+        state.timePromptRect.y - 12,
+        state.timePromptRect.w + 40,
+        state.timePromptRect.h + 24
+    };
+    SDL_RenderFillRect(state.renderer, &promptPanel);
+
+    SDL_SetRenderDrawColor(state.renderer, 231, 212, 181, 255);
+    SDL_RenderDrawRect(state.renderer, &promptPanel);
+
+    for (const TimeTextSegment& segment : state.currentTimeSegments) {
+        if (segment.texture) {
+            SDL_RenderCopy(state.renderer, segment.texture, nullptr, &segment.rect);
+        }
+    }
+
+    for (const TimeBlankState& blank : state.currentTimeBlanks) {
+        SDL_Color blankFill = {248, 244, 238, 240};
+        SDL_Color centerFill = {230, 216, 195, 230};
+        if (blank.gradeState == 1) {
+            blankFill = {255, 255, 200, 255};
+            centerFill = {255, 245, 170, 255};
+        } else if (blank.gradeState == -1) {
+            blankFill = {255, 200, 200, 255};
+            centerFill = {255, 176, 176, 255};
+        }
+
+        SDL_SetRenderDrawColor(state.renderer, blankFill.r, blankFill.g, blankFill.b, blankFill.a);
+        SDL_RenderFillRect(state.renderer, &blank.viewportRect);
+        SDL_SetRenderDrawColor(state.renderer, 220, 220, 220, 255);
+        SDL_RenderDrawRect(state.renderer, &blank.viewportRect);
+
+        SDL_Rect centerBand = {
+            blank.viewportRect.x + 2,
+            blank.viewportRect.y + (blank.viewportRect.h / 2) - 16,
+            blank.viewportRect.w - 4,
+            32
+        };
+        SDL_SetRenderDrawColor(state.renderer, centerFill.r, centerFill.g, centerFill.b, centerFill.a);
+        SDL_RenderFillRect(state.renderer, &centerBand);
+
+        SDL_RenderSetClipRect(state.renderer, &blank.viewportRect);
+
+        const int optionCount = static_cast<int>(blank.options.size());
+        const int itemSpacing = 26;
+        for (int offset = -1; offset <= 1; ++offset) {
+            const int optionIndex = (blank.selectedIndex + offset + optionCount) % optionCount;
+            SDL_Color textColor = offset == 0 ? SDL_Color{20, 20, 20, 255} : SDL_Color{110, 110, 110, 255};
+            SDL_Texture* optionTexture = createTextTexture(blank.options[optionIndex], textColor);
+            if (!optionTexture) {
+                continue;
+            }
+
+            int textWidth = 0;
+            int textHeight = 0;
+            SDL_QueryTexture(optionTexture, nullptr, nullptr, &textWidth, &textHeight);
+            SDL_Rect textRect = {
+                blank.viewportRect.x + (blank.viewportRect.w - textWidth) / 2,
+                blank.viewportRect.y + (blank.viewportRect.h / 2) - (textHeight / 2) + (offset * itemSpacing),
+                textWidth,
+                textHeight
+            };
+            SDL_RenderCopy(state.renderer, optionTexture, nullptr, &textRect);
+            SDL_DestroyTexture(optionTexture);
+        }
+
+        SDL_RenderSetClipRect(state.renderer, nullptr);
+
+        SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(state.renderer, blankFill.r, blankFill.g, blankFill.b, 180);
+        SDL_Rect topFade = {blank.viewportRect.x, blank.viewportRect.y, blank.viewportRect.w, 16};
+        SDL_Rect bottomFade = {blank.viewportRect.x, blank.viewportRect.y + blank.viewportRect.h - 16, blank.viewportRect.w, 16};
+        SDL_RenderFillRect(state.renderer, &topFade);
+        SDL_RenderFillRect(state.renderer, &bottomFade);
+    }
+
+    drawButtonRect(state.renderer, state.timeCheckButtonRect, {255, 255, 255, 255}, {40, 40, 40, 255});
+    if (state.timeCheckButtonTexture) {
+        SDL_RenderCopy(state.renderer, state.timeCheckButtonTexture, nullptr, &state.timeCheckTextRect);
+    }
+
+    if (state.timeDebugTexture) {
+        SDL_Rect debugPanel = {
+            state.timeDebugRect.x - 12,
+            state.timeDebugRect.y - 8,
+            state.timeDebugRect.w + 24,
+            state.timeDebugRect.h + 16
+        };
+        SDL_SetRenderDrawColor(state.renderer, 255, 255, 255, 220);
+        SDL_RenderFillRect(state.renderer, &debugPanel);
+        SDL_SetRenderDrawColor(state.renderer, 220, 220, 220, 255);
+        SDL_RenderDrawRect(state.renderer, &debugPanel);
+        SDL_RenderCopy(state.renderer, state.timeDebugTexture, nullptr, &state.timeDebugRect);
+    }
 }
 
 int main(int argc, char* argv[]) {
@@ -1714,7 +2500,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Set clock hand textures in kitchen
-    kitchen.setClockHandTextures(minuteHandTexture, hourHandTexture);
+    kitchen.setClockHandTextures(hourHandTexture, minuteHandTexture);
 
     // Set initial game state
     state.showingIcon = true;
@@ -1729,6 +2515,47 @@ int main(int argc, char* argv[]) {
         std::cout << "Failed to load sentences from database!" << std::endl;
         return 1;
     }
+    if (!loadTimeQuestions()) {
+        std::cout << "Failed to load time questions from database!" << std::endl;
+        return 1;
+    }
+
+    state.timeCheckButtonTexture = createTextTexture("Revisar", {0, 0, 0, 255});
+    if (!state.timeCheckButtonTexture) {
+        return 1;
+    }
+
+    int checkTextWidth = 0;
+    int checkTextHeight = 0;
+    SDL_QueryTexture(state.timeCheckButtonTexture, nullptr, nullptr, &checkTextWidth, &checkTextHeight);
+    state.timeCheckButtonRect = {
+        SCREEN_WIDTH - 180,
+        SCREEN_HEIGHT - 92,
+        checkTextWidth + 28,
+        checkTextHeight + 18
+    };
+    state.timeCheckTextRect = {
+        state.timeCheckButtonRect.x + (state.timeCheckButtonRect.w - checkTextWidth) / 2,
+        state.timeCheckButtonRect.y + (state.timeCheckButtonRect.h - checkTextHeight) / 2,
+        checkTextWidth,
+        checkTextHeight
+    };
+
+    state.timeStartTextTexture = createTextTexture("Play", {64, 64, 64, 255});
+    if (!state.timeStartTextTexture) {
+        return 1;
+    }
+
+    int startTextWidth = 0;
+    int startTextHeight = 0;
+    SDL_QueryTexture(state.timeStartTextTexture, nullptr, nullptr, &startTextWidth, &startTextHeight);
+    state.timeStartButtonRect = state.originalButtonRect;
+    state.timeStartTextRect = {
+        state.timeStartButtonRect.x + (state.timeStartButtonRect.w - startTextWidth) / 2,
+        state.timeStartButtonRect.y + (state.timeStartButtonRect.h - startTextHeight) / 2,
+        startTextWidth,
+        startTextHeight
+    };
 
     // Initialize game state
     state.gameStarted = false;
@@ -1743,7 +2570,13 @@ int main(int argc, char* argv[]) {
     state.answerFeedback = false;
     state.feedbackStartTime = 0;
     state.feedbackColor = {0, 255, 0, 255};
-    
+    state.timePromptTexture = nullptr;
+    state.timeDebugTexture = nullptr;
+    state.timeGameStarted = false;
+    state.showingTimeFeedback = false;
+    state.timeAnswerCorrect = false;
+    state.timeFeedbackStartTime = 0;
+    state.currentTimeQuestion = -1;
     // Select initial random sentence
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -1768,6 +2601,11 @@ int main(int argc, char* argv[]) {
     SDL_DestroyTexture(state.textTexture);
     SDL_DestroyTexture(state.spanishTextTexture);
     SDL_DestroyTexture(state.englishTextTexture);
+    SDL_DestroyTexture(state.targetWordTexture);
+    SDL_DestroyTexture(state.timePromptTexture);
+    SDL_DestroyTexture(state.timeCheckButtonTexture);
+    SDL_DestroyTexture(state.timeDebugTexture);
+    SDL_DestroyTexture(state.timeStartTextTexture);
     for (SDL_Texture* sprite : state.sprites) {
         SDL_DestroyTexture(sprite);
     }

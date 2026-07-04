@@ -19,10 +19,19 @@ public:
     void cleanup();
     bool isInZoomClickArea(int x, int y) const;
     bool isInClockHoverArea(int x, int y) const;
+    bool isInClockFace(int x, int y) const;
     bool isZoomed() const { return showingZoomedView; }
     void toggleZoom() { showingZoomedView = !showingZoomedView; }
     void updateClockHands();
     void setClockHandTextures(SDL_Texture* hourHand, SDL_Texture* minuteHand);
+    void setDisplayedTime(int hour, int minute);
+    void resetDisplayedTime();
+    bool handleClockClick(int x, int y);
+    bool matchesTime(int hour, int minute) const;
+    int getDisplayedHour() const { return selectedHour; }
+    int getDisplayedMinute() const { return selectedMinute; }
+    float getHourHandRotation() const { return hourHandRotation; }
+    float getMinuteHandRotation() const { return minuteHandRotation; }
     
 private:
     SDL_Texture* kitchenTexture;
@@ -36,6 +45,8 @@ private:
     float hourHandRotation;
     float minuteHandRotation;
     Uint32 lastHandRotationTime;
+    int selectedHour;
+    int selectedMinute;
     
     void renderClockHands(SDL_Renderer* renderer);
 };
