@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <unordered_set>
 #include <cctype>
 #include <iomanip>
 #include <sstream>
@@ -620,6 +621,19 @@ void spawnGhost() {
         return;
     }
 
+    std::unordered_set<int> activeWordIds;
+    int activeChoiceCount = 0;
+    for (const GhostInstance& existingGhost : state.activeGhosts) {
+        if (!existingGhost.clicked) {
+            activeWordIds.insert(existingGhost.wordId);
+            activeChoiceCount++;
+        }
+    }
+
+    if (activeChoiceCount >= 3) {
+        return;
+    }
+
     static std::random_device rd;
     static std::mt19937 gen(rd());
     static std::uniform_int_distribution<> dis(0, state.sprites.size() - 1);
@@ -648,8 +662,22 @@ void spawnGhost() {
     ghost.correct = false;
     ghost.tint = {255, 255, 255, 255};
 
-    const int wordId = state.current_word_choices[state.nextGhostWordIndex % state.current_word_choices.size()];
-    state.nextGhostWordIndex++;
+    int wordId = -1;
+    const int choiceCount = static_cast<int>(state.current_word_choices.size());
+    for (int offset = 0; offset < choiceCount; ++offset) {
+        const int candidateIndex = (state.nextGhostWordIndex + offset) % choiceCount;
+        const int candidateWordId = state.current_word_choices[candidateIndex];
+        if (!activeWordIds.count(candidateWordId)) {
+            wordId = candidateWordId;
+            state.nextGhostWordIndex = (candidateIndex + 1) % choiceCount;
+            break;
+        }
+    }
+
+    if (wordId == -1) {
+        return;
+    }
+
     ghost.wordId = wordId;
     ghost.wordTexture = nullptr;
 
