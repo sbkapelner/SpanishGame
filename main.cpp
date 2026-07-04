@@ -8,6 +8,7 @@
 #include <random>
 #include <chrono>
 #include <algorithm>
+#include <cmath>
 #include <functional>
 #include <cctype>
 #include <iomanip>
@@ -20,6 +21,8 @@
 
 #include "library_game.h"
 #include "kitchen/kitchen.h"
+
+struct GhostInstance;
 
 // Forward declarations
 void selectNewWordChoices();
@@ -42,6 +45,11 @@ void updateTimeBlankUI();
 void updateTimeDebugTexture();
 void resetTimeGameState();
 void startTimeGame();
+void clearActiveGhosts();
+void spawnGhost();
+void updateGhosts();
+float getGhostAlphaFactor(const GhostInstance& ghost, Uint32 currentTime);
+SDL_Rect getAnimatedGhostRectForSprite(int spriteIndex, const SDL_Rect& baseRect, float baseAlphaFactor, Uint32 spawnTime, float driftVelocityX, float driftVelocityY, float& rotationOut, Uint8& alphaOut);
 
 // Blinking animation structure
 struct BlinkingSprite {
@@ -254,6 +262,24 @@ struct TimeTextSegment {
     SDL_Rect rect;
 };
 
+struct GhostInstance {
+    int spriteIndex;
+    SDL_Rect baseRect;
+    Uint32 spawnTime;
+    Uint32 fadeInDuration;
+    Uint32 visibleDuration;
+    Uint32 fadeOutDuration;
+    float driftVelocityX;
+    float driftVelocityY;
+    int wordId;
+    std::string word;
+    SDL_Texture* wordTexture;
+    SDL_Color tint;
+    bool clicked;
+    Uint32 clickTime;
+    bool correct;
+};
+
 // Game state structure
 struct GameState {
     SDL_Window* window;
@@ -283,6 +309,7 @@ struct GameState {
     Mix_Chunk* tombstoneSound;
     std::vector<SDL_Texture*> sprites;
     std::vector<SDL_Point> spriteSizes;
+    std::vector<GhostInstance> activeGhosts;
     SDL_Rect currentSpriteRect;
     SDL_Rect buttonRect;
     SDL_Rect textRect;
@@ -308,8 +335,12 @@ struct GameState {
     bool gameStarted;
     int currentSprite;
     Uint32 lastSpriteChange;
+    Uint32 nextGhostSpawnTime;
     Uint32 spriteStartTime;
+    Uint32 currentGhostDriftStartTime;
     float fadeAlpha;
+    float currentGhostDriftVelocityX;
+    float currentGhostDriftVelocityY;
     bool fadingIn;
     bool waitingToFadeOut;
     std::vector<SentencePair> sentences;
@@ -322,6 +353,7 @@ struct GameState {
     std::vector<std::string> timeGenericHourOptions;
     std::vector<std::string> timeMinuteOptions;
     int currentSentence;
+    int nextGhostWordIndex;
     int currentTimeQuestion;
     int currentTargetWordIndex;
     bool answerFeedback;
@@ -573,58 +605,166 @@ SDL_Point getRandomPosition(int spriteWidth, int spriteHeight, int screenWidth, 
     return {disX(gen), disY(gen)};
 }
 
-void updateSprite() {
-    const Uint32 currentTime = SDL_GetTicks();
-    const Uint32 spriteDisplayTime = 3000;  // 3 seconds
-    const float fadeSpeed = 0.1f;
-    
-    if (!state.gameStarted) {
+void clearActiveGhosts() {
+    for (GhostInstance& ghost : state.activeGhosts) {
+        if (ghost.wordTexture) {
+            SDL_DestroyTexture(ghost.wordTexture);
+            ghost.wordTexture = nullptr;
+        }
+    }
+    state.activeGhosts.clear();
+}
+
+void spawnGhost() {
+    if (state.current_word_choices.empty() || state.target_words.empty()) {
         return;
     }
 
-    if (state.fadingIn) {
-        state.fadeAlpha += fadeSpeed;
-        if (state.fadeAlpha >= 1.0f) {
-            state.fadeAlpha = 1.0f;
-            state.fadingIn = false;
-            state.waitingToFadeOut = true;
-            state.spriteStartTime = currentTime;  // Start the display timer
-        }
-    } else if (state.waitingToFadeOut) {
-        // Check if we've displayed for 3 seconds
-        if (currentTime - state.spriteStartTime >= spriteDisplayTime) {
-            state.waitingToFadeOut = false;  // Start fading out
-        }
-    } else {
-        state.fadeAlpha -= fadeSpeed;
-        if (state.fadeAlpha <= 0.0f) {
-            state.fadeAlpha = 0.0f;
-            
-            // Select new random sprite and position
-            static std::random_device rd;
-            static std::mt19937 gen(rd());
-            static std::uniform_int_distribution<> dis(0, state.sprites.size() - 1);
-            
-            state.currentSprite = dis(gen);
-            SDL_Point newPos = getRandomPosition(
-                state.spriteSizes[state.currentSprite].x,
-                state.spriteSizes[state.currentSprite].y,
-                SCREEN_WIDTH, SCREEN_HEIGHT
-            );
-            
-            // Update sprite position
-            state.currentSpriteRect.w = state.spriteSizes[state.currentSprite].x;
-            state.currentSpriteRect.h = state.spriteSizes[state.currentSprite].y;
-            state.currentSpriteRect.x = newPos.x;
-            state.currentSpriteRect.y = newPos.y;
-            
-            state.lastSpriteChange = currentTime;
-            state.fadingIn = true;
-            
-            // Cycle to the next word when sprite changes
-            cycleTargetWord();
-        }
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    static std::uniform_int_distribution<> dis(0, state.sprites.size() - 1);
+    static std::uniform_real_distribution<float> driftDis(-24.0f, 24.0f);
+
+    GhostInstance ghost{};
+    ghost.spriteIndex = dis(gen);
+    SDL_Point newPos = getRandomPosition(
+        state.spriteSizes[ghost.spriteIndex].x,
+        state.spriteSizes[ghost.spriteIndex].y,
+        SCREEN_WIDTH, SCREEN_HEIGHT
+    );
+
+    ghost.baseRect.w = state.spriteSizes[ghost.spriteIndex].x;
+    ghost.baseRect.h = state.spriteSizes[ghost.spriteIndex].y;
+    ghost.baseRect.x = newPos.x;
+    ghost.baseRect.y = newPos.y;
+    ghost.spawnTime = SDL_GetTicks();
+    ghost.fadeInDuration = 150;
+    ghost.visibleDuration = 9000;
+    ghost.fadeOutDuration = 400;
+    ghost.driftVelocityX = driftDis(gen);
+    ghost.driftVelocityY = driftDis(gen) * 0.7f;
+    ghost.clicked = false;
+    ghost.clickTime = 0;
+    ghost.correct = false;
+    ghost.tint = {255, 255, 255, 255};
+
+    const int wordId = state.current_word_choices[state.nextGhostWordIndex % state.current_word_choices.size()];
+    state.nextGhostWordIndex++;
+    ghost.wordId = wordId;
+    ghost.wordTexture = nullptr;
+
+    auto wordIt = std::find_if(state.target_words.begin(), state.target_words.end(),
+        [wordId](const TargetWord& tw) { return tw.id == wordId; });
+    if (wordIt != state.target_words.end()) {
+        ghost.word = wordIt->word;
     }
+
+    const int totalWidth = std::max(10, static_cast<int>(ghost.word.length()));
+    const int paddingNeeded = totalWidth - static_cast<int>(ghost.word.length());
+    const int leftPadding = paddingNeeded / 2;
+    const int rightPadding = paddingNeeded - leftPadding;
+    const std::string paddedWord = std::string(leftPadding, ' ') + ghost.word + std::string(rightPadding, ' ');
+    SDL_Surface* textSurface = TTF_RenderUTF8_Shaded(state.font, paddedWord.c_str(), {0, 0, 0, 255}, {255, 255, 255, 255});
+    if (textSurface) {
+        ghost.wordTexture = SDL_CreateTextureFromSurface(state.renderer, textSurface);
+        if (ghost.wordTexture) {
+            SDL_SetTextureBlendMode(ghost.wordTexture, SDL_BLENDMODE_BLEND);
+        }
+        SDL_FreeSurface(textSurface);
+    }
+
+    state.activeGhosts.push_back(ghost);
+    state.lastSpriteChange = ghost.spawnTime;
+    std::cout << "Spawned ghost count: " << state.activeGhosts.size() << std::endl;
+}
+
+float getGhostAlphaFactor(const GhostInstance& ghost, Uint32 currentTime) {
+    if (ghost.clicked) {
+        const float clickElapsed = static_cast<float>(currentTime - ghost.clickTime);
+        return std::clamp(1.0f - (clickElapsed / ghost.fadeOutDuration), 0.0f, 1.0f);
+    }
+
+    const Uint32 age = (currentTime >= ghost.spawnTime) ? (currentTime - ghost.spawnTime) : 0;
+    if (age < ghost.fadeInDuration) {
+        return static_cast<float>(age) / ghost.fadeInDuration;
+    }
+    if (age < ghost.visibleDuration) {
+        return 1.0f;
+    }
+    const float fadeElapsed = static_cast<float>(age - ghost.visibleDuration);
+    return std::clamp(1.0f - (fadeElapsed / ghost.fadeOutDuration), 0.0f, 1.0f);
+}
+
+void updateGhosts() {
+    Uint32 currentTime = SDL_GetTicks();
+    const Uint32 spawnInterval = 1500;
+
+    if (!state.gameStarted || state.showingFeedback || state.gameFinished) {
+        return;
+    }
+
+    if (state.nextGhostSpawnTime == 0) {
+        state.nextGhostSpawnTime = currentTime;
+    }
+
+    while (currentTime >= state.nextGhostSpawnTime) {
+        spawnGhost();
+        state.nextGhostSpawnTime += spawnInterval;
+    }
+
+    currentTime = SDL_GetTicks();
+
+    state.activeGhosts.erase(
+        std::remove_if(state.activeGhosts.begin(), state.activeGhosts.end(),
+            [currentTime](GhostInstance& ghost) {
+                const float alpha = getGhostAlphaFactor(ghost, currentTime);
+                if (alpha <= 0.0f) {
+                    if (ghost.wordTexture) {
+                        SDL_DestroyTexture(ghost.wordTexture);
+                        ghost.wordTexture = nullptr;
+                    }
+                    return true;
+                }
+                return false;
+            }),
+        state.activeGhosts.end());
+}
+
+SDL_Rect getAnimatedGhostRectForSprite(
+    int spriteIndex,
+    const SDL_Rect& baseRect,
+    float baseAlphaFactor,
+    Uint32 spawnTime,
+    float driftVelocityX,
+    float driftVelocityY,
+    float& rotationOut,
+    Uint8& alphaOut
+) {
+    SDL_Rect animatedRect = baseRect;
+    rotationOut = 0.0f;
+    alphaOut = static_cast<Uint8>(std::clamp(baseAlphaFactor * 192.0f, 0.0f, 255.0f));
+
+    if (spriteIndex < 0 || spriteIndex >= static_cast<int>(state.sprites.size())) {
+        return animatedRect;
+    }
+
+    const float t = SDL_GetTicks() / 1000.0f;
+    const float driftElapsed = (SDL_GetTicks() - spawnTime) / 1000.0f;
+    const float spritePhase = (spriteIndex * 0.9f) + (baseRect.x * 0.01f);
+
+    const float yOffset = sinf((t * 2.1f) + spritePhase) * 7.0f;
+    const float xOffset = sinf((t * 1.35f) + (spritePhase * 0.7f)) * 5.0f;
+    const float sharedRipple = sinf((t * 1.6f) + (baseRect.x * 0.0125f)) * 4.0f;
+
+    animatedRect.x += static_cast<int>(std::lround((driftVelocityX * driftElapsed) + xOffset + sharedRipple));
+    animatedRect.y += static_cast<int>(std::lround((driftVelocityY * driftElapsed) + yOffset));
+
+    rotationOut = sinf((t * 1.2f) + (spritePhase * 0.8f)) * 4.0f;
+
+    const float alphaPulse = 0.9f + (0.1f * ((sinf((t * 1.7f) + spritePhase) + 1.0f) * 0.5f));
+    alphaOut = static_cast<Uint8>(std::clamp(baseAlphaFactor * 192.0f * alphaPulse, 0.0f, 255.0f));
+
+    return animatedRect;
 }
 
 SDL_Texture* createTextTexture(const std::string& text, SDL_Color color, int wrapWidth = 0) {
@@ -768,6 +908,7 @@ std::string maskTargetWord(const std::string& sentence, const std::string& targe
 
 void selectNewWordChoices() {
     state.current_word_choices.clear();
+    state.nextGhostWordIndex = 0;
     
     // Get the target word ID from the current sentence
     int target_word_id = state.sentences[state.currentSentence].target_word_id;
@@ -810,14 +951,6 @@ void selectNewWordChoices() {
     // Shuffle all choices including the target word
     std::shuffle(state.current_word_choices.begin(), state.current_word_choices.end(), gen);
     
-    // Find the index of the target word after shuffling
-    auto it = std::find(state.current_word_choices.begin(), state.current_word_choices.end(), target_word_id);
-    if (it == state.current_word_choices.end()) {
-        std::cout << "Error: Target word not found in choices!" << std::endl;
-        return;
-    }
-    state.currentTargetWordIndex = std::distance(state.current_word_choices.begin(), it);
-    
     // Print out all word choices for debugging
     std::cout << "Word choices: ";
     for (int id : state.current_word_choices) {
@@ -827,7 +960,7 @@ void selectNewWordChoices() {
             std::cout << word_it->word << "(" << id << ") ";
         }
     }
-    std::cout << "\nCorrect word index: " << state.currentTargetWordIndex << std::endl;
+    std::cout << std::endl;
 }
 
 void updateTargetWordDisplay() {
@@ -1122,86 +1255,72 @@ void handleEvents(SDL_Event& e, GameState& state) {
                 state.gameStarted = true;
                 state.showingGameScreen = true;  // Add this line
                 Mix_PlayChannel(-1, state.tombstoneSound, 0);  // Play the tombstone sound once
-                state.lastSpriteChange = SDL_GetTicks();
-                state.fadingIn = true;
-                state.fadeAlpha = 0.0f;
-                state.currentSprite = state.sprites.size(); // Set to invalid sprite index initially
                 // Select initial word choices when game starts
                 selectNewWordChoices();
-                updateTargetWordDisplay();
                 updateSentenceDisplay();
+                clearActiveGhosts();
+                state.lastSpriteChange = 0;
+                state.nextGhostSpawnTime = SDL_GetTicks() + 1500;
+                state.currentSprite = state.sprites.size();
+                state.nextGhostWordIndex = 0;
+                spawnGhost();
+                spawnGhost();
             }
             else if (state.gameStarted && !state.showingFeedback) {
-                // Check if click is within the current sprite
-                if (mouseX >= state.currentSpriteRect.x && 
-                    mouseX <= state.currentSpriteRect.x + state.currentSpriteRect.w &&
-                    mouseY >= state.currentSpriteRect.y && 
-                    mouseY <= state.currentSpriteRect.y + state.currentSpriteRect.h) {
-                    
-                    // Get the current displayed word's ID from current_word_choices
-                    int displayed_word_id = state.current_word_choices[state.currentTargetWordIndex];
-                    
-                    // Get the target word ID from the current sentence (foreign key)
-                    int target_word_id = state.sentences[state.currentSentence].target_word_id;
-                    
-                    // Find the actual words for debugging
-                    auto displayed_word_it = std::find_if(state.target_words.begin(), state.target_words.end(),
-                                                        [displayed_word_id](const TargetWord& tw) { return tw.id == displayed_word_id; });
-                    auto target_word_it = std::find_if(state.target_words.begin(), state.target_words.end(),
-                                                      [target_word_id](const TargetWord& tw) { return tw.id == target_word_id; });
-                    
-                    std::cout << "\nClick detected on sprite!" << std::endl;
-                    std::cout << "Current word index: " << state.currentTargetWordIndex << std::endl;
-                    std::cout << "Displayed word: " << (displayed_word_it != state.target_words.end() ? displayed_word_it->word : "unknown") 
-                             << " (ID: " << displayed_word_id << ")" << std::endl;
-                    std::cout << "Target word: " << (target_word_it != state.target_words.end() ? target_word_it->word : "unknown")
-                             << " (ID: " << target_word_id << ")" << std::endl;
-                    
-                    // Compare the displayed word ID with the target word ID
-                    if (displayed_word_id == target_word_id) {
-                        std::cout << "Correct answer!" << std::endl;
-                        state.answerFeedback = true;
-                        state.showingFeedback = true;
-                        state.feedbackStartTime = SDL_GetTicks();
-                        state.feedbackColor = {0, 255, 0, 255}; // Green for correct
-                        state.spriteColor = {255, 255, 200, 255}; // Light yellow
-                        Mix_PlayChannel(-1, state.correctSound, 0);
-                        
-                        // Increment questions answered
-                        state.questionsAnswered++;
-                        
-                        // Check if game should end
-                        if (state.questionsAnswered >= 10) {
-                            state.gameFinished = true;
-                            state.currentSprite = state.sprites.size(); // Hide current sprite
-                            
-                            // Clear textures for next game
-                            if (state.spanishTextTexture) {
-                                SDL_DestroyTexture(state.spanishTextTexture);
-                                state.spanishTextTexture = nullptr;
+                for (auto it = state.activeGhosts.rbegin(); it != state.activeGhosts.rend(); ++it) {
+                    GhostInstance& ghost = *it;
+                    float ghostRotation = 0.0f;
+                    Uint8 ghostAlpha = 0;
+                    SDL_Rect animatedGhostRect = getAnimatedGhostRectForSprite(
+                        ghost.spriteIndex,
+                        ghost.baseRect,
+                        getGhostAlphaFactor(ghost, SDL_GetTicks()),
+                        ghost.spawnTime,
+                        ghost.driftVelocityX,
+                        ghost.driftVelocityY,
+                        ghostRotation,
+                        ghostAlpha
+                    );
+
+                    if (mouseX >= animatedGhostRect.x &&
+                        mouseX <= animatedGhostRect.x + animatedGhostRect.w &&
+                        mouseY >= animatedGhostRect.y &&
+                        mouseY <= animatedGhostRect.y + animatedGhostRect.h &&
+                        !ghost.clicked) {
+                        const int target_word_id = state.sentences[state.currentSentence].target_word_id;
+                        const bool isCorrect = ghost.wordId == target_word_id;
+
+                        ghost.clicked = true;
+                        ghost.clickTime = SDL_GetTicks();
+                        ghost.correct = isCorrect;
+                        ghost.tint = isCorrect ? SDL_Color{255, 255, 200, 255} : SDL_Color{255, 200, 200, 255};
+
+                        if (isCorrect) {
+                            clearActiveGhosts();
+                            state.answerFeedback = true;
+                            state.showingFeedback = true;
+                            state.feedbackStartTime = SDL_GetTicks();
+                            Mix_PlayChannel(-1, state.correctSound, 0);
+                            state.questionsAnswered++;
+
+                            if (state.questionsAnswered >= 10) {
+                                state.gameFinished = true;
+                                clearActiveGhosts();
+                                if (state.spanishTextTexture) {
+                                    SDL_DestroyTexture(state.spanishTextTexture);
+                                    state.spanishTextTexture = nullptr;
+                                }
+                                if (state.englishTextTexture) {
+                                    SDL_DestroyTexture(state.englishTextTexture);
+                                    state.englishTextTexture = nullptr;
+                                }
+                                state.spanishTextRect = {0, 0, 0, 0};
+                                state.englishTextRect = {0, 0, 0, 0};
                             }
-                            if (state.englishTextTexture) {
-                                SDL_DestroyTexture(state.englishTextTexture);
-                                state.englishTextTexture = nullptr;
-                            }
-                            if (state.targetWordTexture) {
-                                SDL_DestroyTexture(state.targetWordTexture);
-                                state.targetWordTexture = nullptr;
-                            }
-                            
-                            // Clear text rectangles
-                            state.spanishTextRect = {0, 0, 0, 0};
-                            state.englishTextRect = {0, 0, 0, 0};
-                            state.targetWordRect = {0, 0, 0, 0};
+                        } else {
+                            Mix_PlayChannel(-1, state.incorrectSound, 0);
                         }
-                    } else {
-                        std::cout << "Incorrect answer!" << std::endl;
-                        state.answerFeedback = false;
-                        state.showingFeedback = true;
-                        state.feedbackStartTime = SDL_GetTicks();
-                        state.feedbackColor = {255, 0, 0, 255}; // Red for incorrect
-                        state.spriteColor = {255, 200, 200, 255}; // Light red
-                        Mix_PlayChannel(-1, state.incorrectSound, 0);
+                        break;
                     }
                 }
             }
@@ -1210,25 +1329,22 @@ void handleEvents(SDL_Event& e, GameState& state) {
                 state.gameFinished = false;
                 state.questionsAnswered = 0;
                 state.currentSentence = 0;
-                state.currentTargetWordIndex = 0;
-                state.current_word_choices.clear();
                 state.showingFeedback = false;
                 state.answerFeedback = false;
                 state.transitioningToNextRound = false;
                 state.transitionStartTime = 0;
                 state.spriteColor = {255, 255, 255, 255};
-                state.fadeAlpha = 0.0f;
-                state.fadingIn = false;
-                state.waitingToFadeOut = false;
-                state.currentSprite = state.sprites.size();
-                state.lastSpriteChange = SDL_GetTicks();
-                state.spriteStartTime = 0;
                 state.hoverScale = 1.0f;
                 state.isHovered = false;
                 state.isPlayAgainHovered = false;
                 updateSentenceDisplay();
                 selectNewWordChoices();
-                updateTargetWordDisplay();
+                clearActiveGhosts();
+                state.lastSpriteChange = 0;
+                state.nextGhostSpawnTime = SDL_GetTicks() + 1500;
+                state.nextGhostWordIndex = 0;
+                spawnGhost();
+                spawnGhost();
             }
             else if (state.showingLibraryScreen) {
                 if (showingBookPage) {
@@ -1356,14 +1472,14 @@ void resetGameState() {
     state.gameFinished = false;
     state.questionsAnswered = 0;
     state.currentSentence = 0;
-    state.currentTargetWordIndex = 0;
     state.showingFeedback = false;
     state.answerFeedback = false;
     state.transitioningToNextRound = false;
-    state.currentSprite = state.sprites.size(); // Hide current sprite
-    state.fadeAlpha = 0.0f;
-    state.fadingIn = false;
-    state.waitingToFadeOut = false;
+    state.currentSprite = state.sprites.size();
+    state.lastSpriteChange = 0;
+    state.nextGhostSpawnTime = 0;
+    state.nextGhostWordIndex = 0;
+    clearActiveGhosts();
     
     // Clear any existing textures
     if (state.spanishTextTexture) {
@@ -1373,10 +1489,6 @@ void resetGameState() {
     if (state.englishTextTexture) {
         SDL_DestroyTexture(state.englishTextTexture);
         state.englishTextTexture = nullptr;
-    }
-    if (state.targetWordTexture) {
-        SDL_DestroyTexture(state.targetWordTexture);
-        state.targetWordTexture = nullptr;
     }
     if (state.playAgainTexture) {
         SDL_DestroyTexture(state.playAgainTexture);
@@ -1399,10 +1511,9 @@ void mainLoop() {
         Uint32 currentTime = SDL_GetTicks();
         if (currentTime - state.feedbackStartTime > 1500) { // Show feedback for 1.5 seconds
             state.showingFeedback = false;
-            state.spriteColor = {255, 255, 255, 255}; // Reset to white
             
             // If answer was correct, move to next round
-            if (state.answerFeedback) {
+            if (state.answerFeedback && !state.gameFinished) {
                 state.transitioningToNextRound = true;
                 state.transitionStartTime = currentTime;
             }
@@ -1415,7 +1526,12 @@ void mainLoop() {
         state.currentSentence = rand() % state.sentences.size();
         updateSentenceDisplay();
         selectNewWordChoices();
-        updateTargetWordDisplay();
+        clearActiveGhosts();
+        state.lastSpriteChange = 0;
+        state.nextGhostSpawnTime = SDL_GetTicks() + 1500;
+        state.nextGhostWordIndex = 0;
+        spawnGhost();
+        spawnGhost();
     }
 
     if (state.showingTimeFeedback) {
@@ -1430,7 +1546,7 @@ void mainLoop() {
     }
     
     updateButtonAnimation();
-    updateSprite();
+    updateGhosts();
 
     if (state.showingLibraryScreen && showingBookPage) {
         updateTextAnimation();  // Add this line to update text animation
@@ -1514,23 +1630,40 @@ void mainLoop() {
             SDL_RenderCopy(state.renderer, state.spanishTextTexture, NULL, &state.spanishTextRect);
             SDL_RenderCopy(state.renderer, state.englishTextTexture, NULL, &state.englishTextRect);
             
-            if (state.currentSprite < state.sprites.size()) {
-                // Set base opacity to 75% (192) and then apply fade alpha
-                Uint8 baseOpacity = 192;  // 75% opacity
-                SDL_SetTextureAlphaMod(state.sprites[state.currentSprite], 
-                                     static_cast<Uint8>(state.fadeAlpha * baseOpacity));
-                SDL_SetTextureColorMod(state.sprites[state.currentSprite],
-                                      state.spriteColor.r,
-                                      state.spriteColor.g,
-                                      state.spriteColor.b);
-                SDL_RenderCopy(state.renderer, state.sprites[state.currentSprite], 
-                              NULL, &state.currentSpriteRect);
-                
-                if (state.targetWordTexture && state.gameStarted) {
-                    SDL_SetTextureAlphaMod(state.targetWordTexture, 
-                                         static_cast<Uint8>(state.fadeAlpha * baseOpacity));
-                    SDL_RenderCopy(state.renderer, state.targetWordTexture, 
-                                  NULL, &state.targetWordRect);
+            for (const GhostInstance& ghost : state.activeGhosts) {
+                float ghostRotation = 0.0f;
+                Uint8 ghostAlpha = 0;
+                SDL_Rect animatedGhostRect = getAnimatedGhostRectForSprite(
+                    ghost.spriteIndex,
+                    ghost.baseRect,
+                    getGhostAlphaFactor(ghost, SDL_GetTicks()),
+                    ghost.spawnTime,
+                    ghost.driftVelocityX,
+                    ghost.driftVelocityY,
+                    ghostRotation,
+                    ghostAlpha
+                );
+
+                SDL_SetTextureAlphaMod(state.sprites[ghost.spriteIndex], ghostAlpha);
+                SDL_SetTextureColorMod(state.sprites[ghost.spriteIndex],
+                                      ghost.tint.r,
+                                      ghost.tint.g,
+                                      ghost.tint.b);
+                SDL_RenderCopyEx(state.renderer, state.sprites[ghost.spriteIndex],
+                                 NULL, &animatedGhostRect, ghostRotation, NULL, SDL_FLIP_NONE);
+
+                if (ghost.wordTexture) {
+                    SDL_SetTextureAlphaMod(ghost.wordTexture, ghostAlpha);
+                    int wordWidth = 0;
+                    int wordHeight = 0;
+                    SDL_QueryTexture(ghost.wordTexture, nullptr, nullptr, &wordWidth, &wordHeight);
+                    SDL_Rect animatedWordRect = {
+                        animatedGhostRect.x + (animatedGhostRect.w - wordWidth) / 2,
+                        animatedGhostRect.y + (animatedGhostRect.h - wordHeight) / 2,
+                        wordWidth,
+                        wordHeight
+                    };
+                    SDL_RenderCopy(state.renderer, ghost.wordTexture, NULL, &animatedWordRect);
                 }
             }
         }
@@ -2562,8 +2695,12 @@ int main(int argc, char* argv[]) {
     state.quit = false;
     state.currentSprite = 0;
     state.lastSpriteChange = 0;
+    state.nextGhostSpawnTime = 0;
     state.spriteStartTime = 0;
+    state.currentGhostDriftStartTime = 0;
     state.fadeAlpha = 0.0f;
+    state.currentGhostDriftVelocityX = 0.0f;
+    state.currentGhostDriftVelocityY = 0.0f;
     state.fadingIn = false;
     state.waitingToFadeOut = false;
     state.showingFeedback = false;
