@@ -1296,7 +1296,15 @@ void handleEvents(SDL_Event& e, GameState& state) {
                         ghost.tint = isCorrect ? SDL_Color{255, 255, 200, 255} : SDL_Color{255, 200, 200, 255};
 
                         if (isCorrect) {
-                            clearActiveGhosts();
+                            const Uint32 clickTime = ghost.clickTime;
+                            for (GhostInstance& otherGhost : state.activeGhosts) {
+                                if (&otherGhost == &ghost) {
+                                    continue;
+                                }
+                                otherGhost.clicked = true;
+                                otherGhost.clickTime = clickTime;
+                                otherGhost.tint = {255, 255, 255, 255};
+                            }
                             state.answerFeedback = true;
                             state.showingFeedback = true;
                             state.feedbackStartTime = SDL_GetTicks();
